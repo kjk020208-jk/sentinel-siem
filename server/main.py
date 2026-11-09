@@ -1065,24 +1065,30 @@ def reset_siem_demo_attack_data(
     db: Session = Depends(get_db)
 ):
     """
-    발표 시연용 siem_demo 공격 기록 초기화.
+    발표용 siem_demo 초기화.
 
     삭제:
-    - Security Events
-    - Event Risk Explanation
+    - 실제 시연 중 생성된 Event
     - Incident
-    - Response Playbook
-    - Event Context
+    - Playbook
+    - 해당 Event Context / Risk Explanation
 
     유지:
-    - Monitored User 등록
+    - Monitored User
     - Behavior Change 학습 상태
-    - Endpoint Behavior Change 학습 상태
+    - Endpoint 학습 상태
+    - presentation_baseline 정상 이벤트
+
+    추가:
+    - 정상 Baseline 이벤트가 부족하면 30건까지 자동 보충
     """
 
+    from datetime import timedelta
     from sqlalchemy import text
 
     target_user = "siem_demo"
+    baseline_source = "presentation_baseline"
+    baseline_target_count = 30
 
     def table_exists(name):
         return db.execute(
@@ -1096,18 +1102,26 @@ def reset_siem_demo_attack_data(
         ).first() is not None
 
     try:
-        event_ids = []
+        # -----------------------------------------
+        # 1. 삭제 대상 이벤트:
+        # presentation_baseline은 절대 삭제하지 않음
+        # -----------------------------------------
+        removable_event_ids = []
 
         if table_exists("security_events"):
-            event_ids = [
+            removable_event_ids = [
                 int(row[0])
                 for row in db.execute(
                     text("""
                         SELECT id
                         FROM security_events
                         WHERE user=:user
+                          AND COALESCE(source, '') != :baseline_source
                     """),
-                    {"user": target_user},
+                    {
+                        "user": target_user,
+                        "baseline_source": baseline_source,
+                    },
                 ).all()
             ]
 
@@ -1134,24 +1148,27 @@ def reset_siem_demo_attack_data(
             "security_events": 0,
         }
 
+        # -----------------------------------------
+        # 2. 삭제 대상 Event의 Risk Explanation
+        # -----------------------------------------
         if (
-            event_ids
+            removable_event_ids
             and table_exists("event_risk_explanations")
         ):
-            placeholders = ",".join(
+            marks = ",".join(
                 f":event_{i}"
-                for i in range(len(event_ids))
+                for i in range(len(removable_event_ids))
             )
 
             params = {
                 f"event_{i}": event_id
-                for i, event_id in enumerate(event_ids)
+                for i, event_id in enumerate(removable_event_ids)
             }
 
             result = db.execute(
                 text(
                     "DELETE FROM event_risk_explanations "
-                    f"WHERE event_id IN ({placeholders})"
+                    f"WHERE event_id IN ({marks})"
                 ),
                 params,
             )
@@ -1160,11 +1177,14 @@ def reset_siem_demo_attack_data(
                 result.rowcount or 0
             )
 
+        # -----------------------------------------
+        # 3. Playbook 삭제
+        # -----------------------------------------
         if (
             incident_ids
             and table_exists("response_playbook_executions")
         ):
-            placeholders = ",".join(
+            marks = ",".join(
                 f":incident_{i}"
                 for i in range(len(incident_ids))
             )
@@ -1177,7 +1197,7 @@ def reset_siem_demo_attack_data(
             result = db.execute(
                 text(
                     "DELETE FROM response_playbook_executions "
-                    f"WHERE incident_id IN ({placeholders})"
+                    f"WHERE incident_id IN ({marks})"
                 ),
                 params,
             )
@@ -1186,19 +1206,39 @@ def reset_siem_demo_attack_data(
                 result.rowcount or 0
             )
 
-        if table_exists("event_context"):
+        # -----------------------------------------
+        # 4. 실제 시연 Event Context만 삭제
+        # baseline context는 유지
+        # -----------------------------------------
+        if (
+            removable_event_ids
+            and table_exists("event_context")
+        ):
+            marks = ",".join(
+                f":context_event_{i}"
+                for i in range(len(removable_event_ids))
+            )
+
+            params = {
+                f"context_event_{i}": event_id
+                for i, event_id in enumerate(removable_event_ids)
+            }
+
             result = db.execute(
-                text("""
-                    DELETE FROM event_context
-                    WHERE user=:user
-                """),
-                {"user": target_user},
+                text(
+                    "DELETE FROM event_context "
+                    f"WHERE event_id IN ({marks})"
+                ),
+                params,
             )
 
             deleted["event_context"] = int(
                 result.rowcount or 0
             )
 
+        # -----------------------------------------
+        # 5. Incident 삭제
+        # -----------------------------------------
         if table_exists("security_incidents"):
             result = db.execute(
                 text("""
@@ -1212,20 +1252,31 @@ def reset_siem_demo_attack_data(
                 result.rowcount or 0
             )
 
+        # -----------------------------------------
+        # 6. 실제 시연 이벤트만 삭제
+        # -----------------------------------------
         if table_exists("security_events"):
             result = db.execute(
                 text("""
                     DELETE FROM security_events
                     WHERE user=:user
+                      AND COALESCE(source, '') != :baseline_source
                 """),
-                {"user": target_user},
+                {
+                    "user": target_user,
+                    "baseline_source": baseline_source,
+                },
             )
 
             deleted["security_events"] = int(
                 result.rowcount or 0
             )
 
-        # 발표 사용자 등록은 유지하고 모니터링 활성화
+        # -----------------------------------------
+        # 7. 사용자 등록 유지 + 활성화
+        # -----------------------------------------
+        monitored_user = None
+
         if table_exists("monitored_users"):
             db.execute(
                 text("""
@@ -1236,7 +1287,168 @@ def reset_siem_demo_attack_data(
                 {"user": target_user},
             )
 
+            monitored_user = (
+                db.query(MonitoredUser)
+                .filter(MonitoredUser.username == target_user)
+                .first()
+            )
+
         db.commit()
+
+        # -----------------------------------------
+        # 8. 발표용 정상 Baseline 개수 확인
+        # -----------------------------------------
+        baseline_count = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == target_user,
+                SecurityEvent.source == baseline_source,
+                SecurityEvent.risk_level == "LOW",
+            )
+            .count()
+        )
+
+        # -----------------------------------------
+        # 9. 부족한 Baseline 자동 생성
+        # -----------------------------------------
+        created_baseline = 0
+
+        if baseline_count < baseline_target_count:
+            missing = baseline_target_count - baseline_count
+
+            now = datetime.now()
+
+            earliest = now - timedelta(hours=3)
+
+            if (
+                monitored_user is not None
+                and monitored_user.created_at is not None
+            ):
+                registered_after = (
+                    monitored_user.created_at
+                    + timedelta(seconds=5)
+                )
+
+                if registered_after > earliest:
+                    earliest = registered_after
+
+            latest = now - timedelta(seconds=10)
+
+            total_seconds = max(
+                (latest - earliest).total_seconds(),
+                60
+            )
+
+            normal_processes = [
+                "Notepad.exe",
+                "chrome.exe",
+                "Notepad.exe",
+                "chrome.exe",
+            ]
+
+            for i in range(missing):
+                ratio = (
+                    i / max(missing - 1, 1)
+                )
+
+                event_time = (
+                    earliest
+                    + timedelta(
+                        seconds=total_seconds * ratio
+                    )
+                )
+
+                process_name = normal_processes[
+                    i % len(normal_processes)
+                ]
+
+                baseline_event = SecurityEvent(
+                    user=target_user,
+                    event_type="process_execution",
+                    timestamp=event_time,
+                    host="DESKTOP-RIG50RH",
+                    source=baseline_source,
+                    raw_event_id=f"BASELINE-{i+1}",
+                    source_ip="127.0.0.1",
+                    login_success=None,
+                    login_fail_count=0,
+                    file_name=None,
+                    file_path=None,
+                    file_grade=None,
+                    file_access_count=0,
+                    usb_connected=0,
+                    device_name=None,
+                    device_id=None,
+                    process_name=process_name,
+                    anomaly_score=0,
+                    risk_score=5,
+                    risk_level="LOW",
+                    reasons="발표용 정상 행동 Baseline",
+                )
+
+                db.add(baseline_event)
+                db.flush()
+
+                # Extended Context에서도 정상 장비 이력을 유지
+                if table_exists("event_context"):
+                    db.execute(
+                        text("""
+                            INSERT OR REPLACE INTO event_context
+                            (
+                                event_id,
+                                user,
+                                timestamp,
+                                source_ip,
+                                network_prefix,
+                                workstation_name,
+                                host,
+                                logon_type,
+                                command_line,
+                                parent_process,
+                                is_normal
+                            )
+                            VALUES
+                            (
+                                :event_id,
+                                :user,
+                                :timestamp,
+                                :source_ip,
+                                :network_prefix,
+                                :workstation_name,
+                                :host,
+                                :logon_type,
+                                :command_line,
+                                :parent_process,
+                                1
+                            )
+                        """),
+                        {
+                            "event_id": baseline_event.id,
+                            "user": target_user,
+                            "timestamp": event_time,
+                            "source_ip": "127.0.0.1",
+                            "network_prefix": "127.0.0.0/24",
+                            "workstation_name": "DESKTOP-RIG50RH",
+                            "host": "DESKTOP-RIG50RH",
+                            "logon_type": "2",
+                            "command_line": process_name,
+                            "parent_process": "explorer.exe",
+                        },
+                    )
+
+                created_baseline += 1
+
+            db.commit()
+
+        final_baseline_count = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == target_user,
+                SecurityEvent.source == baseline_source,
+                SecurityEvent.risk_level == "LOW",
+            )
+            .count()
+        )
 
         return {
             "message": "siem_demo 발표 시나리오 초기화 완료",
@@ -1244,6 +1456,9 @@ def reset_siem_demo_attack_data(
             "deleted": deleted,
             "behavior_change_preserved": True,
             "endpoint_learning_preserved": True,
+            "baseline_preserved": True,
+            "baseline_created": created_baseline,
+            "baseline_event_count": final_baseline_count,
         }
 
     except Exception as error:
