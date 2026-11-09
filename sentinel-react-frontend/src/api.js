@@ -122,8 +122,8 @@ export const api = {
     }),
 
   demoReset: () =>
-    request('/demo/reset', {
-      method: 'DELETE'
+    request('/demo/reset-siem-demo', {
+      method: 'POST'
     }),
 
   adaptiveCompare: () =>
@@ -131,3 +131,5 @@ export const api = {
       method: 'POST'
     }),
 }
+
+
