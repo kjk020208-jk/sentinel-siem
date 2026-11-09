@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "plotly.js-dist-min": "latest",
     "react": "latest",
     "react-dom": "latest",
     "react-is": "latest",
-    "plotly.js-dist-min": "latest"
-  },
-  "devDependencies": {}
+    "serve": "^14.2.7",
+    "typescript": "latest",
+    "vite": "latest"
+  }
 }
