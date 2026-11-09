@@ -1,0 +1,54 @@
+﻿# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyCharm
+.idea/
+
+# Environment / Secret
+.env
+.env.*
+!.env.example
+
+# React
+sentinel-react-frontend/node_modules/
+sentinel-react-frontend/dist/
+
+# Temporary
+*.log
+*.tmp
+
+# SQLite temporary files
+*.db-shm
+*.db-wal
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Build / EXE
+build/
+dist/
+*.spec
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+
+# CERT raw dataset
+data/cert_r4.2/
+
+# Old React work copy
+sentinel-react-frontend/v6work/
+
+# Python backup files
+*.before_*.py
+*.before*.py
+
+# Local generated/cache
+.pytest_cache/

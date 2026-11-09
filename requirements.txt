@@ -1,0 +1,11 @@
+﻿fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+scikit-learn
+numpy
+pandas
+requests
+python-docx
+python-multipart
+openai
