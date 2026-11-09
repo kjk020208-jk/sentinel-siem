@@ -225,6 +225,33 @@ def _strong_risk(risk_score, risk_level, reasons):
     text_value = " ".join(str(x) for x in (reasons or []))
     return any(keyword in text_value for keyword in STRONG_CONTEXT_KEYWORDS)
 
+def _candidate_risky(change_type, risk_score, risk_level, reasons):
+    """
+    행동 변화 후보 자체와 관련된 위험 신호만 해당 후보의
+    REJECTED 판정에 사용한다.
+
+    예:
+    USB 연결 위험 때문에 정상 WORKSTATION까지 REJECTED 되는
+    cross-contamination을 방지한다.
+    """
+    reason_text = " ".join(str(x) for x in (reasons or []))
+
+    if change_type == "NETWORK":
+        return "평소 사용 대역과 다른 네트워크" in reason_text
+
+    if change_type == "WORKSTATION":
+        return "평소 사용하지 않던 PC·장치" in reason_text
+
+    if change_type == "LOGON_TYPE":
+        return "평소와 다른 로그인 접속 환경" in reason_text
+
+    return _strong_risk(
+        risk_score,
+        risk_level,
+        reasons
+    )
+
+
 def _extended_candidates(event):
     result = []
     prefix = _network_prefix(getattr(event, "source_ip", None))
@@ -245,10 +272,15 @@ def evaluate_extended_behavior_changes(
     if reference_time is None:
         reference_time = getattr(event, "timestamp", None) or datetime.now()
 
-    risky = _strong_risk(risk_score, risk_level, reasons)
     output = []
 
     for change_type, change_value in _extended_candidates(event):
+        risky = _candidate_risky(
+            change_type,
+            risk_score,
+            risk_level,
+            reasons
+        )
         row = db.execute(
             text("""
                 SELECT id, status, first_seen, last_seen, seen_count,
