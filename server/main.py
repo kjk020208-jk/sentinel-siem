@@ -1055,6 +1055,209 @@ def create_event(
     }
 
 
+
+# -------------------------------------------------
+# Presentation Demo Reset
+# -------------------------------------------------
+
+@app.post("/demo/reset-siem-demo")
+def reset_siem_demo_attack_data(
+    db: Session = Depends(get_db)
+):
+    """
+    발표 시연용 siem_demo 공격 기록 초기화.
+
+    삭제:
+    - Security Events
+    - Event Risk Explanation
+    - Incident
+    - Response Playbook
+    - Event Context
+
+    유지:
+    - Monitored User 등록
+    - Behavior Change 학습 상태
+    - Endpoint Behavior Change 학습 상태
+    """
+
+    from sqlalchemy import text
+
+    target_user = "siem_demo"
+
+    def table_exists(name):
+        return db.execute(
+            text("""
+                SELECT 1
+                FROM sqlite_master
+                WHERE type='table'
+                  AND name=:name
+            """),
+            {"name": name},
+        ).first() is not None
+
+    try:
+        event_ids = []
+
+        if table_exists("security_events"):
+            event_ids = [
+                int(row[0])
+                for row in db.execute(
+                    text("""
+                        SELECT id
+                        FROM security_events
+                        WHERE user=:user
+                    """),
+                    {"user": target_user},
+                ).all()
+            ]
+
+        incident_ids = []
+
+        if table_exists("security_incidents"):
+            incident_ids = [
+                int(row[0])
+                for row in db.execute(
+                    text("""
+                        SELECT id
+                        FROM security_incidents
+                        WHERE user=:user
+                    """),
+                    {"user": target_user},
+                ).all()
+            ]
+
+        deleted = {
+            "event_risk_explanations": 0,
+            "response_playbook_executions": 0,
+            "event_context": 0,
+            "security_incidents": 0,
+            "security_events": 0,
+        }
+
+        if (
+            event_ids
+            and table_exists("event_risk_explanations")
+        ):
+            placeholders = ",".join(
+                f":event_{i}"
+                for i in range(len(event_ids))
+            )
+
+            params = {
+                f"event_{i}": event_id
+                for i, event_id in enumerate(event_ids)
+            }
+
+            result = db.execute(
+                text(
+                    "DELETE FROM event_risk_explanations "
+                    f"WHERE event_id IN ({placeholders})"
+                ),
+                params,
+            )
+
+            deleted["event_risk_explanations"] = int(
+                result.rowcount or 0
+            )
+
+        if (
+            incident_ids
+            and table_exists("response_playbook_executions")
+        ):
+            placeholders = ",".join(
+                f":incident_{i}"
+                for i in range(len(incident_ids))
+            )
+
+            params = {
+                f"incident_{i}": incident_id
+                for i, incident_id in enumerate(incident_ids)
+            }
+
+            result = db.execute(
+                text(
+                    "DELETE FROM response_playbook_executions "
+                    f"WHERE incident_id IN ({placeholders})"
+                ),
+                params,
+            )
+
+            deleted["response_playbook_executions"] = int(
+                result.rowcount or 0
+            )
+
+        if table_exists("event_context"):
+            result = db.execute(
+                text("""
+                    DELETE FROM event_context
+                    WHERE user=:user
+                """),
+                {"user": target_user},
+            )
+
+            deleted["event_context"] = int(
+                result.rowcount or 0
+            )
+
+        if table_exists("security_incidents"):
+            result = db.execute(
+                text("""
+                    DELETE FROM security_incidents
+                    WHERE user=:user
+                """),
+                {"user": target_user},
+            )
+
+            deleted["security_incidents"] = int(
+                result.rowcount or 0
+            )
+
+        if table_exists("security_events"):
+            result = db.execute(
+                text("""
+                    DELETE FROM security_events
+                    WHERE user=:user
+                """),
+                {"user": target_user},
+            )
+
+            deleted["security_events"] = int(
+                result.rowcount or 0
+            )
+
+        # 발표 사용자 등록은 유지하고 모니터링 활성화
+        if table_exists("monitored_users"):
+            db.execute(
+                text("""
+                    UPDATE monitored_users
+                       SET monitoring_enabled=1
+                     WHERE username=:user
+                """),
+                {"user": target_user},
+            )
+
+        db.commit()
+
+        return {
+            "message": "siem_demo 발표 시나리오 초기화 완료",
+            "user": target_user,
+            "deleted": deleted,
+            "behavior_change_preserved": True,
+            "endpoint_learning_preserved": True,
+        }
+
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "시연 데이터 초기화 실패: "
+                f"{type(error).__name__}: {error}"
+            )
+        )
+
+
 # -------------------------------------------------
 # Incident Correlation / Attack Storyline
 # -------------------------------------------------
