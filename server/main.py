@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from time import perf_counter
 from typing import Optional
@@ -96,6 +97,18 @@ app = FastAPI(
     description="내부자 위협 탐지 및 대응 플랫폼",
     version="0.9"
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://sentinel-siem-production.up.railway.app",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 # -------------------------------------------------
