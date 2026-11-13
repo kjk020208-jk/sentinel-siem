@@ -1296,6 +1296,116 @@ def reset_siem_demo_attack_data(
         db.commit()
 
         # -----------------------------------------
+        # 7-1. 발표용 정상 행동 화이트리스트 보장
+        #
+        # presentation_baseline 30건이 사용하는
+        # IP / PROCESS는 정상 행동으로 수동 승인한다.
+        #
+        # manual_override=1인 ACCEPTED 항목은
+        # Behavior Change 상태만 정상으로 유지하며,
+        # Rule / Sequence / Incident 탐지는 그대로 작동한다.
+        # -----------------------------------------
+        if table_exists("behavior_change_observations"):
+            normal_changes = [
+                ("IP", "127.0.0.1"),
+                ("PROCESS", "chrome.exe"),
+                ("PROCESS", "notepad.exe"),
+            ]
+
+            whitelist_now = datetime.now()
+
+            for change_type, change_value in normal_changes:
+                existing = db.execute(
+                    text("""
+                        SELECT id
+                        FROM behavior_change_observations
+                        WHERE user=:user
+                          AND change_type=:change_type
+                          AND change_value=:change_value
+                    """),
+                    {
+                        "user": target_user,
+                        "change_type": change_type,
+                        "change_value": change_value,
+                    },
+                ).mappings().first()
+
+                if existing:
+                    db.execute(
+                        text("""
+                            UPDATE behavior_change_observations
+                               SET status='ACCEPTED',
+                                   manual_override=1,
+                                   manual_note=:note,
+                                   decision_reason=:reason,
+                                   decided_at=:decided_at,
+                                   risky_context_count=0,
+                                   max_risk_score=0
+                             WHERE id=:id
+                        """),
+                        {
+                            "id": existing["id"],
+                            "note": "발표용 정상 Baseline 행동",
+                            "reason": (
+                                "SOC 관리자 수동 승인: "
+                                "발표용 정상 Baseline 행동"
+                            ),
+                            "decided_at": whitelist_now,
+                        },
+                    )
+
+                else:
+                    db.execute(
+                        text("""
+                            INSERT INTO behavior_change_observations
+                            (
+                                user,
+                                change_type,
+                                change_value,
+                                status,
+                                first_seen,
+                                last_seen,
+                                seen_count,
+                                max_risk_score,
+                                risky_context_count,
+                                decision_reason,
+                                manual_override,
+                                manual_note,
+                                decided_at
+                            )
+                            VALUES
+                            (
+                                :user,
+                                :change_type,
+                                :change_value,
+                                'ACCEPTED',
+                                :now,
+                                :now,
+                                3,
+                                0,
+                                0,
+                                :reason,
+                                1,
+                                :note,
+                                :now
+                            )
+                        """),
+                        {
+                            "user": target_user,
+                            "change_type": change_type,
+                            "change_value": change_value,
+                            "now": whitelist_now,
+                            "note": "발표용 정상 Baseline 행동",
+                            "reason": (
+                                "SOC 관리자 수동 승인: "
+                                "발표용 정상 Baseline 행동"
+                            ),
+                        },
+                    )
+
+            db.commit()
+
+        # -----------------------------------------
         # 8. 발표용 정상 Baseline 개수 확인
         # -----------------------------------------
         baseline_count = (
