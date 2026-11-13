@@ -1088,7 +1088,7 @@ def reset_siem_demo_attack_data(
 
     target_user = "siem_demo"
     baseline_source = "presentation_baseline"
-    baseline_target_count = 30
+    baseline_target_count = 120
 
     def table_exists(name):
         return db.execute(
@@ -1307,9 +1307,18 @@ def reset_siem_demo_attack_data(
         # -----------------------------------------
         if table_exists("behavior_change_observations"):
             normal_changes = [
+                # 실제 시연 PC에서 정상적으로 사용되는 네트워크
                 ("IP", "127.0.0.1"),
+                ("IP", "172.20.10.13"),
+
+                # IT / 사무 업무에서 반복적으로 사용하는 정상 프로세스
                 ("PROCESS", "chrome.exe"),
+                ("PROCESS", "code.exe"),
                 ("PROCESS", "notepad.exe"),
+                ("PROCESS", "winword.exe"),
+                ("PROCESS", "excel.exe"),
+                ("PROCESS", "outlook.exe"),
+                ("PROCESS", "acrord32.exe"),
             ]
 
             whitelist_now = datetime.now()
@@ -1408,11 +1417,22 @@ def reset_siem_demo_attack_data(
         # -----------------------------------------
         # 8. 발표용 정상 Baseline 재구성
         #
-        # 발표 화면에서 자연스럽게 보이도록
-        # 평일 09:00~17:00 업무시간대로 30건을 배치한다.
+        # 최근 10개 평일 x 하루 12건 = 총 120건
         #
-        # 초기화할 때마다 기존 presentation_baseline만
-        # 다시 만들기 때문에 공격 이벤트와 섞이지 않는다.
+        # 정상 업무 패턴:
+        # - 월~금
+        # - 09:00~17:00
+        # - 정상 로그인
+        # - Chrome / VS Code / Notepad
+        # - Word / Excel / Outlook / PDF Reader
+        # - 일반 문서 접근
+        #
+        # 의도적으로 제외:
+        # - PowerShell
+        # - USB
+        #
+        # 따라서 공격 시연에서 PowerShell / USB가
+        # 기존 정상 행동과 명확하게 대비된다.
         # -----------------------------------------
 
         old_baseline_ids = [
@@ -1431,7 +1451,7 @@ def reset_siem_demo_attack_data(
             ).all()
         ]
 
-        # 기존 Baseline Event Context 제거
+        # 기존 발표용 Baseline의 Event Context 제거
         if old_baseline_ids and table_exists("event_context"):
             marks = ",".join(
                 f":baseline_event_{i}"
@@ -1451,7 +1471,7 @@ def reset_siem_demo_attack_data(
                 params,
             )
 
-        # 기존 발표용 Baseline 이벤트만 제거
+        # 기존 presentation_baseline만 삭제
         db.execute(
             text("""
                 DELETE FROM security_events
@@ -1467,171 +1487,244 @@ def reset_siem_demo_attack_data(
         db.commit()
 
         # -----------------------------------------
-        # 9. 평일 업무시간 Baseline 30건 생성
+        # 최근 10개 평일 계산
         # -----------------------------------------
 
         now = datetime.now()
 
-        learning_start = (
-            now - timedelta(days=30)
+        business_days = []
+        cursor = (
+            now - timedelta(days=1)
+        ).replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
         )
 
-        if (
-            monitored_user is not None
-            and monitored_user.created_at is not None
-        ):
-            registered_after = (
-                monitored_user.created_at
-                + timedelta(seconds=5)
-            )
+        while len(business_days) < 10:
+            if cursor.weekday() < 5:
+                business_days.append(cursor)
 
-            if registered_after > learning_start:
-                learning_start = registered_after
+            cursor -= timedelta(days=1)
 
-        candidate_slots = []
-
-        # 최근 날짜부터 최대 30일을 확인한다.
-        # 평일 09~17시만 정상 업무시간으로 사용한다.
-        for days_ago in range(0, 30):
-            target_day = (
-                now - timedelta(days=days_ago)
-            )
-
-            # 월~금만
-            if target_day.weekday() >= 5:
-                continue
-
-            for hour in [
-                9, 10, 11,
-                13, 14, 15, 16, 17
-            ]:
-                # 같은 시간대에 여러 정상 이벤트가 존재할 수 있도록
-                # 10분 / 30분 / 50분 슬롯 사용
-                for minute in [10, 30, 50]:
-                    event_time = target_day.replace(
-                        hour=hour,
-                        minute=minute,
-                        second=0,
-                        microsecond=0,
-                    )
-
-                    if event_time <= learning_start:
-                        continue
-
-                    if event_time >= now:
-                        continue
-
-                    candidate_slots.append(
-                        event_time
-                    )
-
-        candidate_slots = sorted(
-            candidate_slots
+        business_days = sorted(
+            business_days
         )
 
-        # 가장 최근의 정상 업무 이력 30개 사용
-        selected_slots = (
-            candidate_slots[-baseline_target_count:]
-        )
+        # -----------------------------------------
+        # 하루 정상 행동 시나리오
+        #
+        # 12건 / 일
+        # -----------------------------------------
 
-        if len(selected_slots) < baseline_target_count:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "발표용 Baseline 생성에 필요한 "
-                    "업무시간 슬롯이 부족합니다. "
-                    f"사용 가능 슬롯={len(selected_slots)}"
-                ),
-            )
+        daily_template = [
+            # 시간, 분, 이벤트 종류, 프로세스, 파일, 접근량
+            (9,  0,  "login",   None,          None,                  0),
+
+            (9, 15,  "process", "outlook.exe", None,                  0),
+            (9, 40,  "process", "chrome.exe",  None,                  0),
+
+            (10, 20, "file",    "winword.exe", "project_notes.docx", 2),
+
+            (11,  0, "process", "code.exe",    None,                  0),
+            (11, 40, "process", "notepad.exe", None,                  0),
+
+            (13, 20, "file",    "excel.exe",   "weekly_report.xlsx", 3),
+
+            (14, 10, "process", "chrome.exe",  None,                  0),
+            (15,  0, "process", "acrord32.exe",None,                  0),
+
+            (15, 40, "file",    "winword.exe", "meeting_notes.docx", 2),
+
+            (16, 20, "process", "excel.exe",   None,                  0),
+            (17,  0, "process", "outlook.exe", None,                  0),
+        ]
 
         created_baseline = 0
 
-        normal_processes = [
-            "notepad.exe",
-            "chrome.exe",
+        # 두 정상 IP를 충분히 반복시켜
+        # 둘 다 알려진 Source IP가 되도록 한다.
+        normal_ips = [
+            "172.20.10.13",
+            "127.0.0.1",
         ]
 
-        for i, event_time in enumerate(selected_slots):
-            process_name = (
-                normal_processes[
-                    i % len(normal_processes)
-                ]
-            )
+        for day_index, day in enumerate(business_days):
 
-            baseline_event = SecurityEvent(
-                user=target_user,
-                event_type="process_execution",
-                timestamp=event_time,
-                host="DESKTOP-RIG50RH",
-                source=baseline_source,
-                raw_event_id=f"PRESENTATION-BASELINE-{i + 1}",
-                source_ip="127.0.0.1",
-                login_success=None,
-                login_fail_count=0,
-                file_name=None,
-                file_path=None,
-                file_grade=None,
-                file_access_count=0,
-                usb_connected=0,
-                device_name=None,
-                device_id=None,
-                process_name=process_name,
-                anomaly_score=0,
-                risk_score=5,
-                risk_level="LOW",
-                reasons="발표용 정상 업무시간 Baseline",
-            )
+            for event_index, (
+                hour,
+                minute,
+                event_kind,
+                process_name,
+                file_name,
+                file_access_count,
+            ) in enumerate(daily_template):
 
-            db.add(baseline_event)
-            db.flush()
-
-            if table_exists("event_context"):
-                db.execute(
-                    text("""
-                        INSERT OR REPLACE INTO event_context
-                        (
-                            event_id,
-                            user,
-                            timestamp,
-                            source_ip,
-                            network_prefix,
-                            workstation_name,
-                            host,
-                            logon_type,
-                            command_line,
-                            parent_process,
-                            is_normal
-                        )
-                        VALUES
-                        (
-                            :event_id,
-                            :user,
-                            :timestamp,
-                            :source_ip,
-                            :network_prefix,
-                            :workstation_name,
-                            :host,
-                            :logon_type,
-                            :command_line,
-                            :parent_process,
-                            1
-                        )
-                    """),
-                    {
-                        "event_id": baseline_event.id,
-                        "user": target_user,
-                        "timestamp": event_time,
-                        "source_ip": "127.0.0.1",
-                        "network_prefix": "127.0.0.0/24",
-                        "workstation_name": "DESKTOP-RIG50RH",
-                        "host": "DESKTOP-RIG50RH",
-                        "logon_type": "2",
-                        "command_line": process_name,
-                        "parent_process": "explorer.exe",
-                    },
+                event_time = day.replace(
+                    hour=hour,
+                    minute=minute,
+                    second=0,
+                    microsecond=0,
                 )
 
-            created_baseline += 1
+                source_ip = normal_ips[
+                    (day_index + event_index) % len(normal_ips)
+                ]
+
+                # ---------------------------------
+                # 로그인 성공
+                # ---------------------------------
+
+                if event_kind == "login":
+                    event_type = "login_success"
+                    login_success = 1
+                    process_value = None
+                    file_value = None
+                    grade_value = None
+                    access_count = 0
+
+                # ---------------------------------
+                # 일반 파일 접근
+                # ---------------------------------
+
+                elif event_kind == "file":
+                    event_type = "file_access"
+                    login_success = 1
+                    process_value = process_name
+                    file_value = file_name
+                    grade_value = "일반"
+                    access_count = file_access_count
+
+                # ---------------------------------
+                # 정상 프로세스 실행
+                # ---------------------------------
+
+                else:
+                    event_type = "process_execution"
+                    login_success = None
+                    process_value = process_name
+                    file_value = None
+                    grade_value = None
+                    access_count = 0
+
+                baseline_event = SecurityEvent(
+                    user=target_user,
+                    event_type=event_type,
+                    timestamp=event_time,
+
+                    host="DESKTOP-RIG50RH",
+                    source=baseline_source,
+
+                    raw_event_id=(
+                        f"PRESENTATION-BASELINE-"
+                        f"{day_index + 1:02d}-"
+                        f"{event_index + 1:02d}"
+                    ),
+
+                    source_ip=source_ip,
+
+                    login_success=login_success,
+                    login_fail_count=0,
+
+                    file_name=file_value,
+                    file_path=(
+                        f"C:\\WORK\\{file_value}"
+                        if file_value
+                        else None
+                    ),
+                    file_grade=grade_value,
+                    file_access_count=access_count,
+
+                    usb_connected=0,
+                    device_name=None,
+                    device_id=None,
+
+                    process_name=process_value,
+
+                    anomaly_score=0,
+                    risk_score=5,
+                    risk_level="LOW",
+
+                    reasons=(
+                        "발표용 IT 사용자 정상 업무 Baseline"
+                    ),
+                )
+
+                db.add(baseline_event)
+                db.flush()
+
+                # ---------------------------------
+                # Extended Context 정상 이력
+                # ---------------------------------
+
+                if table_exists("event_context"):
+                    db.execute(
+                        text("""
+                            INSERT OR REPLACE INTO event_context
+                            (
+                                event_id,
+                                user,
+                                timestamp,
+                                source_ip,
+                                network_prefix,
+                                workstation_name,
+                                host,
+                                logon_type,
+                                command_line,
+                                parent_process,
+                                is_normal
+                            )
+                            VALUES
+                            (
+                                :event_id,
+                                :user,
+                                :timestamp,
+                                :source_ip,
+                                :network_prefix,
+                                :workstation_name,
+                                :host,
+                                :logon_type,
+                                :command_line,
+                                :parent_process,
+                                1
+                            )
+                        """),
+                        {
+                            "event_id": baseline_event.id,
+                            "user": target_user,
+                            "timestamp": event_time,
+                            "source_ip": source_ip,
+
+                            "network_prefix": (
+                                "172.20.10.0/24"
+                                if source_ip.startswith("172.20.10.")
+                                else "127.0.0.0/24"
+                            ),
+
+                            "workstation_name": (
+                                "DESKTOP-RIG50RH"
+                            ),
+
+                            "host": (
+                                "DESKTOP-RIG50RH"
+                            ),
+
+                            "logon_type": "2",
+
+                            "command_line": (
+                                process_value
+                                if process_value
+                                else ""
+                            ),
+
+                            "parent_process": (
+                                "explorer.exe"
+                            ),
+                        },
+                    )
+
+                created_baseline += 1
 
         db.commit()
 

@@ -79,11 +79,19 @@ def _get_learning_events(
     ):
         learning_since = monitored_user.created_at
 
+    # 최근 30일의 LOW 이벤트를 먼저 조회한다.
+    #
+    # 일반 실제 이벤트:
+    #   MonitoredUser 등록 시점 이후만 학습
+    #
+    # presentation_baseline:
+    #   발표용으로 사전에 검증·생성한 정상 이력이므로
+    #   최근 30일 범위에서는 등록 시점 이전 데이터도 허용
     events = (
         db.query(SecurityEvent)
         .filter(
             SecurityEvent.user == user,
-            SecurityEvent.timestamp >= learning_since,
+            SecurityEvent.timestamp >= since,
             SecurityEvent.timestamp < reference_time,
             SecurityEvent.risk_level == LEARNING_RISK_LEVEL
         )
@@ -94,7 +102,17 @@ def _get_learning_events(
     return [
         event
         for event in events
-        if is_event_allowed_for_baseline(db, event)
+        if (
+            (
+                event.timestamp >= learning_since
+                or getattr(event, "source", None)
+                == "presentation_baseline"
+            )
+            and is_event_allowed_for_baseline(
+                db,
+                event
+            )
+        )
     ]
 
 
