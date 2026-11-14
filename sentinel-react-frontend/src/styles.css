@@ -3321,3 +3321,452 @@ textarea:focus {
     inset 0 1px 0 rgba(255,255,255,.06) !important;
 }
 
+/* =========================================================
+   SENTINEL V7 — REAL GLASS POLISH OVERRIDE
+   ========================================================= */
+
+:root{
+  --glass-fill: rgba(30, 30, 34, 0.42);
+  --glass-fill-strong: rgba(36, 36, 42, 0.56);
+  --glass-border: rgba(255,255,255,0.14);
+  --glass-border-soft: rgba(255,255,255,0.08);
+  --glass-topline: rgba(255,255,255,0.22);
+  --glass-specular: rgba(255,255,255,0.16);
+  --glass-shadow: rgba(0,0,0,0.45);
+
+  --panel-fill: rgba(20, 20, 24, 0.72);
+  --panel-fill-2: rgba(14, 14, 18, 0.88);
+
+  --blue-1: #4db2ff;
+  --blue-2: #1d8fff;
+  --blue-3: #0a6bff;
+}
+
+/* ---------------------------------------------------------
+   APP BACKGROUND
+   너무 까만 배경만 있으면 glass가 안 살아남
+   --------------------------------------------------------- */
+
+body,
+#root,
+.app-shell,
+.app-layout,
+main {
+  background:
+    radial-gradient(1200px 700px at 78% -10%, rgba(41,118,255,0.12), transparent 50%),
+    radial-gradient(900px 500px at 18% 18%, rgba(255,255,255,0.04), transparent 35%),
+    linear-gradient(180deg, #060709 0%, #030406 48%, #020304 100%) !important;
+}
+
+/* ---------------------------------------------------------
+   LEFT SIDEBAR
+   --------------------------------------------------------- */
+
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(10,10,12,0.72), rgba(7,7,9,0.82)) !important;
+  backdrop-filter: blur(34px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(160%) !important;
+  border-right: 1px solid rgba(255,255,255,0.06) !important;
+  box-shadow:
+    inset -1px 0 0 rgba(255,255,255,0.03),
+    24px 0 60px rgba(0,0,0,0.30) !important;
+}
+
+/* ---------------------------------------------------------
+   FIX: LEFT TOP SENTINEL AREA
+   왜 이상하냐 = 로고 블록에 예전 스타일이 누적됨
+   아래로 강제 정리
+   --------------------------------------------------------- */
+
+.sidebar-brand,
+.brand-panel,
+.brand-wrap {
+  position: relative !important;
+  overflow: hidden !important;
+  margin: 14px 14px 18px !important;
+  padding: 18px 16px 16px !important;
+  min-height: 112px !important;
+
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.09), rgba(255,255,255,0.025)) !important;
+
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 22px !important;
+
+  backdrop-filter: blur(26px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(170%) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(255,255,255,0.02),
+    0 18px 40px rgba(0,0,0,0.22) !important;
+}
+
+/* 상단 유리 반사 라인 */
+.sidebar-brand::before,
+.brand-panel::before,
+.brand-wrap::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 10% !important;
+  right: 10% !important;
+  top: 1px !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.72), transparent) !important;
+  opacity: 0.75 !important;
+  pointer-events: none !important;
+}
+
+/* 유리 표면에 비치는 빛 */
+.sidebar-brand::after,
+.brand-panel::after,
+.brand-wrap::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 180px !important;
+  height: 180px !important;
+  top: -90px !important;
+  right: -20px !important;
+  border-radius: 50% !important;
+  background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 38%, transparent 68%) !important;
+  filter: blur(6px) !important;
+  pointer-events: none !important;
+}
+
+/* 로고 영역 내부 불필요한 구분선 제거 */
+.sidebar-brand hr,
+.sidebar-brand .divider,
+.brand-panel hr,
+.brand-panel .divider,
+.brand-wrap hr,
+.brand-wrap .divider {
+  display: none !important;
+}
+
+/* 브랜드 텍스트 */
+.sidebar-brand h1,
+.sidebar-brand .brand-title,
+.brand-panel h1,
+.brand-panel .brand-title,
+.brand-wrap h1,
+.brand-wrap .brand-title {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.14em !important;
+  color: #f5f5f7 !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.sidebar-brand p,
+.sidebar-brand .brand-subtitle,
+.brand-panel p,
+.brand-panel .brand-subtitle,
+.brand-wrap p,
+.brand-wrap .brand-subtitle {
+  margin: 0 !important;
+  font-size: 11px !important;
+  line-height: 1.55 !important;
+  color: rgba(255,255,255,0.42) !important;
+}
+
+/* ---------------------------------------------------------
+   SIDEBAR MENU BUTTONS
+   --------------------------------------------------------- */
+
+.nav-btn {
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: 14px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  transition: all .18s ease !important;
+}
+
+.nav-btn:hover {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)) !important;
+  border-color: rgba(255,255,255,0.07) !important;
+}
+
+.nav-btn.active {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.07)) !important;
+  border: 1px solid rgba(255,255,255,0.11) !important;
+  backdrop-filter: blur(24px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(170%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.20),
+    0 10px 26px rgba(0,0,0,0.20) !important;
+}
+
+.nav-btn.active::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 12% !important;
+  right: 12% !important;
+  top: 1px !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent) !important;
+  opacity: .75 !important;
+}
+
+/* ---------------------------------------------------------
+   KPI BAR (윗줄 숫자 카드)
+   glass + specular
+   --------------------------------------------------------- */
+
+.kpis,
+.kpi-row,
+.summary-strip {
+  position: relative !important;
+  overflow: hidden !important;
+
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)),
+    linear-gradient(180deg, rgba(20,20,24,0.82), rgba(10,10,12,0.88)) !important;
+
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 24px !important;
+
+  backdrop-filter: blur(26px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(160%) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 -1px 0 rgba(255,255,255,0.02),
+    0 22px 60px rgba(0,0,0,0.20) !important;
+}
+
+.kpis::before,
+.kpi-row::before,
+.summary-strip::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 8% !important;
+  right: 8% !important;
+  top: 1px !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.60), transparent) !important;
+  opacity: .55 !important;
+  pointer-events: none !important;
+}
+
+.kpis::after,
+.kpi-row::after,
+.summary-strip::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 340px !important;
+  height: 180px !important;
+  left: -60px !important;
+  top: -90px !important;
+  background: radial-gradient(circle, rgba(255,255,255,0.10), transparent 68%) !important;
+  filter: blur(8px) !important;
+  pointer-events: none !important;
+}
+
+/* ---------------------------------------------------------
+   CHART PANELS
+   지금 제일 중요
+   --------------------------------------------------------- */
+
+.visual-panel,
+.chart-card,
+.panel-chart,
+.metric-card {
+  position: relative !important;
+  overflow: hidden !important;
+
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.018)),
+    linear-gradient(180deg, rgba(22,22,27,0.86), rgba(10,10,14,0.92)) !important;
+
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 24px !important;
+
+  backdrop-filter: blur(24px) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(155%) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 -1px 0 rgba(255,255,255,0.02),
+    0 20px 55px rgba(0,0,0,0.22) !important;
+}
+
+/* 윗면 반짝임 */
+.visual-panel::before,
+.chart-card::before,
+.panel-chart::before,
+.metric-card::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 8% !important;
+  right: 8% !important;
+  top: 1px !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.70), transparent) !important;
+  opacity: .7 !important;
+  pointer-events: none !important;
+}
+
+/* 실제 유리 느낌의 스펙큘러 하이라이트 */
+.visual-panel::after,
+.chart-card::after,
+.panel-chart::after,
+.metric-card::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -28% !important;
+  left: -10% !important;
+  width: 72% !important;
+  height: 44% !important;
+  border-radius: 50% !important;
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(255,255,255,0.17) 0%,
+      rgba(255,255,255,0.07) 35%,
+      rgba(255,255,255,0.02) 58%,
+      transparent 76%
+    ) !important;
+
+  filter: blur(10px) !important;
+  transform: rotate(-8deg) !important;
+  pointer-events: none !important;
+}
+
+/* ---------------------------------------------------------
+   LIVE EVENT ROWS
+   --------------------------------------------------------- */
+
+.feed-row,
+.live-row,
+.event-row {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.012)),
+    linear-gradient(180deg, rgba(18,18,22,0.82), rgba(10,10,12,0.90)) !important;
+
+  border: 1px solid rgba(255,255,255,0.09) !important;
+  border-radius: 14px !important;
+
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 8px 22px rgba(0,0,0,0.14) !important;
+}
+
+.feed-row:hover,
+.live-row:hover,
+.event-row:hover {
+  border-color: rgba(255,255,255,0.13) !important;
+  transform: translateY(-1px);
+}
+
+/* ---------------------------------------------------------
+   TABLES
+   지금 표가 촌스러운 핵심 원인
+   --------------------------------------------------------- */
+
+.table-wrap,
+.data-table-wrap,
+.table-panel {
+  overflow: hidden !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
+    linear-gradient(180deg, rgba(18,18,22,0.90), rgba(10,10,12,0.95)) !important;
+
+  backdrop-filter: blur(20px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(145%) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 16px 42px rgba(0,0,0,0.18) !important;
+}
+
+.table-wrap table,
+.data-table-wrap table,
+.table-panel table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.table-wrap thead,
+.data-table-wrap thead,
+.table-panel thead {
+  background:
+    linear-gradient(180deg, rgba(42,42,48,0.72), rgba(30,30,34,0.58)) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+}
+
+.table-wrap th,
+.data-table-wrap th,
+.table-panel th {
+  color: rgba(255,255,255,0.62) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.03em !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+
+.table-wrap td,
+.data-table-wrap td,
+.table-panel td {
+  border-bottom: 1px solid rgba(255,255,255,0.045) !important;
+}
+
+.table-wrap tbody tr:hover,
+.data-table-wrap tbody tr:hover,
+.table-panel tbody tr:hover {
+  background: rgba(255,255,255,0.055) !important;
+}
+
+/* ---------------------------------------------------------
+   DONUT CHART CANVAS 카드 안쪽 정렬
+   --------------------------------------------------------- */
+
+canvas {
+  image-rendering: auto !important;
+}
+
+/* ---------------------------------------------------------
+   USER SESSION PILL
+   --------------------------------------------------------- */
+
+.sentinel-session-control {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05)) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  border-radius: 999px !important;
+  backdrop-filter: blur(22px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(165%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    0 10px 28px rgba(0,0,0,0.22) !important;
+}
+
+/* ---------------------------------------------------------
+   BUTTONS
+   --------------------------------------------------------- */
+
+.btn,
+button {
+  border-radius: 999px !important;
+}
+
+.btn.primary,
+button.primary {
+  background:
+    linear-gradient(180deg, rgba(84,176,255,0.98), rgba(23,126,255,0.90)) !important;
+  border: 1px solid rgba(140,205,255,0.50) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.33),
+    0 12px 26px rgba(0,110,255,0.22) !important;
+}
