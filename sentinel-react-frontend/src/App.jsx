@@ -53,18 +53,167 @@ export default function App(){
 }
 
 function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh}){
-  const [resetAllowed,setResetAllowed]=useState(false),[status,setStatus]=useState('')
-  const engines=[['Rule Engine','정상'],['Isolation Forest','정상'],['User Baseline','정상'],['Sequence Detection','정상'],['Peer Group UEBA','정상'],['Dynamic User Risk','정상'],['Incident Correlation','정상'],['PII Detection','정상'],['LLM Analyst','준비']]
-  const demo=async type=>{setStatus('실행 중...');try{const r=await(type==='normal'?api.demoNormal():api.demoAttack());setStatus(type==='normal'?'정상 시나리오 완료':`${r?.final_risk_level||'공격 시나리오 완료'} · Risk ${r?.final_risk_score??'-'}`);refresh()}catch(e){setStatus(`실패: ${e.message}`)}}
-  const reset=async()=>{if(!resetAllowed)return;setStatus('초기화 중...');try{await api.demoReset();setStatus('이벤트 데이터 초기화 완료');refresh()}catch(e){setStatus(`실패: ${e.message}`)}}
-  return <aside className="sidebar"><div className="sidebar-brand"><div className="sidebar-brand-name">SENTINEL</div><div className="sidebar-brand-sub">SIEM / UEBA 보안 관제 플랫폼</div></div><div className="side-section">보안 관제</div>
-    {MENU.map(([id,label])=><button key={id} className={`nav-btn ${page===id?'active':''}`} onClick={()=>setPage(id)}>{label}</button>)}
-    <div className="side-section">탐지 엔진</div>{engines.map(([n,s])=><div className="engine-row" key={n}><span>{n}</span><span className={s==='정상'?'engine-online':'engine-ready'}>{s}</span></div>)}
-    <div className="side-section">시연 제어</div><button className="nav-btn" onClick={()=>demo('normal')}>정상 시나리오 실행</button><button className="nav-btn" onClick={()=>demo('attack')}>공격 시나리오 실행</button>
-    <label className="sidebar-check"><input type="checkbox" checked={resetAllowed} onChange={e=>setResetAllowed(e.target.checked)}/> 전체 이벤트 삭제 허용</label><button className="nav-btn" disabled={!resetAllowed} onClick={reset}>이벤트 데이터 초기화</button>{status&&<div className="sidebar-status">{status}</div>}
-    <div className="side-section">시스템</div><label className="refresh-row"><input type="checkbox" checked={autoRefresh} onChange={e=>setAutoRefresh(e.target.checked)}/><span className={`switch ${autoRefresh?'on':''}`}/><span>실시간 자동 갱신</span><span className="info-dot">ⓘ</span></label><div className="side-note">{autoRefresh?'동기화 실시간 갱신 · 3초':'자동 갱신 중지'}</div><button className="nav-btn refresh-btn" onClick={refresh}>이벤트 데이터 새로고침</button><div className="side-note">VM1 중앙 분석 서버</div><div className="api-line">API · 127.0.0.1:8000</div>
-  </aside>
+  const [collapsed,setCollapsed]=useState(false)
+  const [status,setStatus]=useState('')
+  const [resetAllowed,setResetAllowed]=useState(false)
+
+  const engines=[
+    ['Rule Engine','정상'],
+    ['Isolation Forest','정상'],
+    ['User Baseline','정상'],
+    ['Sequence Detection','정상'],
+    ['Peer Group UEBA','정상'],
+    ['Dynamic User Risk','정상'],
+    ['Incident Correlation','정상'],
+    ['PII Detection','정상'],
+    ['LLM Analyst','준비']
+  ]
+
+  const iconMap={
+    overview:'⌂',
+    events:'◫',
+    incidents:'◆',
+    users:'◎',
+    behavior:'✓',
+    cert:'C'
+  }
+
+  const demo=async type=>{
+    setStatus('실행 중...')
+    try{
+      const r=await(type==='normal'?api.demoNormal():api.demoAttack())
+      setStatus(
+        type==='normal'
+          ? '정상 시나리오 완료'
+          : `${r?.final_risk_level||'공격 시나리오 완료'} · Risk ${r?.final_risk_score??'-'}`
+      )
+      refresh()
+    }catch(e){
+      setStatus(`실패: ${e.message}`)
+    }
+  }
+
+  const reset=async()=>{
+    if(!resetAllowed)return
+    setStatus('초기화 중...')
+    try{
+      await api.demoReset()
+      setStatus('이벤트 데이터 초기화 완료')
+      refresh()
+    }catch(e){
+      setStatus(`실패: ${e.message}`)
+    }
+  }
+
+  return (
+    <aside className={`sidebar ${collapsed?'collapsed':''}`}>
+      <div className="sidebar-head">
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-name">SENTINEL</div>
+          {!collapsed&&(
+            <div className="sidebar-brand-sub">
+              SIEM / UEBA 보안 관제 플랫폼
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={()=>setCollapsed(v=>!v)}
+          title={collapsed?'메뉴 펼치기':'메뉴 접기'}
+        >
+          {collapsed?'☰':'‹'}
+        </button>
+      </div>
+
+      {!collapsed&&<div className="side-section">보안 관제</div>}
+
+      {MENU.map(([id,label])=>(
+        <button
+          key={id}
+          className={`nav-btn ${page===id?'active':''}`}
+          onClick={()=>setPage(id)}
+          title={label}
+        >
+          <span className="nav-mini">{iconMap[id]||'•'}</span>
+          {!collapsed&&<span className="nav-label">{label}</span>}
+        </button>
+      ))}
+
+      {!collapsed&&(
+        <>
+          <div className="side-section">탐지 엔진</div>
+
+          {engines.map(([n,s])=>(
+            <div className="engine-row" key={n}>
+              <span>{n}</span>
+              <span className={s==='정상'?'engine-online':'engine-ready'}>{s}</span>
+            </div>
+          ))}
+
+          <div className="side-section">시연 제어</div>
+
+          <button className="nav-btn" onClick={()=>demo('normal')}>
+            <span className="nav-mini">▶</span>
+            <span className="nav-label">정상 시나리오 실행</span>
+          </button>
+
+          <button className="nav-btn" onClick={()=>demo('attack')}>
+            <span className="nav-mini">!</span>
+            <span className="nav-label">공격 시나리오 실행</span>
+          </button>
+
+          <label className="sidebar-check">
+            <input
+              type="checkbox"
+              checked={resetAllowed}
+              onChange={e=>setResetAllowed(e.target.checked)}
+            />
+            전체 이벤트 삭제 허용
+          </label>
+
+          <button
+            className="nav-btn"
+            disabled={!resetAllowed}
+            onClick={reset}
+          >
+            <span className="nav-mini">⌫</span>
+            <span className="nav-label">이벤트 데이터 초기화</span>
+          </button>
+
+          {status&&<div className="sidebar-status">{status}</div>}
+
+          <div className="side-section">시스템</div>
+
+          <label className="refresh-row">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={e=>setAutoRefresh(e.target.checked)}
+            />
+            <span className={`switch ${autoRefresh?'on':''}`}/>
+            <span>실시간 자동 갱신</span>
+            <span className="info-dot">ⓘ</span>
+          </label>
+
+          <div className="side-note">
+            {autoRefresh?'동기화 실시간 갱신 · 3초':'자동 갱신 중지'}
+          </div>
+
+          <button className="nav-btn refresh-btn" onClick={refresh}>
+            <span className="nav-mini">↻</span>
+            <span className="nav-label">이벤트 데이터 새로고침</span>
+          </button>
+
+          <div className="side-note">VM1 중앙 분석 서버</div>
+          <div className="api-line">API · 127.0.0.1:8000</div>
+        </>
+      )}
+    </aside>
+  )
 }
+
 function TopBar(){return <header className="topbar"><div className="top-actions"><span className="deploy">Deploy</span><span className="system-online">● 시스템 정상</span></div></header>}
 function PageHeader({page}){const[t,s]=PAGE_META[page];const[now,setNow]=useState(new Date());useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id)},[]);return <div className="soc-header"><div><div className="soc-title">{t}</div><div className="soc-subtitle">{s}</div></div><div className="header-right"><div className="header-time">{fmt(now)}</div></div></div>}
 function SectionHeader({children}){return <div className="section-header"><div className="section-title">{children}</div><div className="section-line"/></div>}
