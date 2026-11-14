@@ -679,3 +679,570 @@ th {
   background-clip: padding-box;
 }
 
+
+/* =========================================================
+   SENTINEL DASHBOARD — DARK PRECISION V2
+   restrained black / graphite operational interface
+   ========================================================= */
+
+/* ---------- 전체 배경 ---------- */
+
+body,
+#root {
+  background: #000 !important;
+}
+
+.sentinel-authenticated-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at 68% -15%,
+      rgba(45, 55, 75, 0.12),
+      transparent 31%
+    ),
+    #000;
+}
+
+/* ---------- 대시보드 메인 ---------- */
+
+.app,
+.dashboard,
+.dashboard-layout,
+.app-shell,
+.main-layout {
+  background: transparent !important;
+}
+
+main,
+.main,
+.content,
+.main-content,
+.dashboard-content {
+  background: #050608 !important;
+}
+
+/* ---------- 사이드바 ---------- */
+
+aside,
+.sidebar,
+[class*="sidebar"] {
+  background: rgba(5, 5, 7, 0.98) !important;
+
+  border-right:
+    1px solid rgba(255, 255, 255, 0.065) !important;
+
+  box-shadow: none !important;
+}
+
+/* SENTINEL 로고 영역 */
+
+.sidebar-brand,
+[class*="brand"] {
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.045) !important;
+}
+
+.sidebar-brand h1,
+.sidebar-brand strong,
+[class*="brand"] h1 {
+  color: #f5f5f7 !important;
+
+  font-weight: 700 !important;
+  letter-spacing: 0.17em !important;
+}
+
+/* 그룹 제목 */
+
+.sidebar-section-title,
+.nav-section-title,
+[class*="section-title"] {
+  color: #646468 !important;
+
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+
+  text-transform: none !important;
+}
+
+/* 메뉴 */
+
+aside button,
+.sidebar button,
+nav button {
+  min-height: 38px !important;
+
+  margin: 2px 8px !important;
+  padding: 0 13px !important;
+
+  border: 0 !important;
+  border-radius: 9px !important;
+
+  background: transparent !important;
+
+  color: #a1a1a6 !important;
+
+  font-size: 12px !important;
+  font-weight: 500 !important;
+
+  box-shadow: none !important;
+
+  transition:
+    background 140ms ease,
+    color 140ms ease !important;
+}
+
+aside button:hover,
+.sidebar button:hover,
+nav button:hover {
+  background:
+    rgba(255, 255, 255, 0.055) !important;
+
+  color: #f5f5f7 !important;
+}
+
+aside button.active,
+.sidebar button.active,
+nav button.active,
+aside button[class*="active"],
+.sidebar button[class*="active"] {
+  background:
+    rgba(255, 255, 255, 0.10) !important;
+
+  color: #fff !important;
+
+  border: 0 !important;
+}
+
+/* 탐지 엔진 상태 */
+
+[class*="engine"] {
+  font-size: 11px !important;
+}
+
+[class*="engine"] [class*="status"] {
+  font-size: 10px !important;
+}
+
+/* ---------- 메인 헤더 ---------- */
+
+.page-header,
+.dashboard-header,
+.main-header,
+[class*="header"] {
+  box-shadow: none !important;
+}
+
+.main-content > header,
+.dashboard-content > header {
+  padding-top: 8px;
+}
+
+h1 {
+  color: #f5f5f7 !important;
+
+  font-size: clamp(26px, 2.2vw, 38px) !important;
+  font-weight: 650 !important;
+
+  line-height: 1.08 !important;
+  letter-spacing: -0.045em !important;
+}
+
+h2 {
+  color: #f5f5f7 !important;
+
+  font-weight: 600 !important;
+  letter-spacing: -0.025em !important;
+}
+
+h3 {
+  color: #e8e8ed !important;
+
+  font-weight: 600 !important;
+  letter-spacing: -0.018em !important;
+}
+
+/* 부제목 */
+
+.subtitle,
+.description,
+.page-subtitle {
+  color: #7d7d82 !important;
+}
+
+/* ---------- 섹션 구분 ---------- */
+
+section {
+  border-color:
+    rgba(255, 255, 255, 0.06) !important;
+}
+
+hr {
+  border: 0 !important;
+  border-top:
+    1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ---------- KPI 카드 ---------- */
+
+.metric-card,
+.stat-card,
+.summary-card,
+[class*="metric-card"],
+[class*="stat-card"],
+[class*="summary-card"] {
+  background:
+    rgba(17, 17, 19, 0.84) !important;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.075) !important;
+
+  border-radius: 18px !important;
+
+  box-shadow: none !important;
+
+  transition:
+    background 150ms ease,
+    border-color 150ms ease !important;
+}
+
+.metric-card:hover,
+.stat-card:hover,
+.summary-card:hover {
+  background:
+    rgba(22, 22, 24, 0.92) !important;
+
+  border-color:
+    rgba(255, 255, 255, 0.11) !important;
+}
+
+/* KPI 제목 */
+
+.metric-card .label,
+.stat-card .label,
+[class*="metric"] [class*="label"] {
+  color: #77777c !important;
+
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+/* KPI 숫자 */
+
+.metric-card .value,
+.stat-card .value,
+[class*="metric"] [class*="value"] {
+  color: #f5f5f7 !important;
+
+  font-weight: 650 !important;
+  letter-spacing: -0.045em !important;
+}
+
+/* 카드 설명 */
+
+.metric-card small,
+.stat-card small,
+.metric-card p,
+.stat-card p {
+  color: #606065 !important;
+}
+
+/* ---------- 일반 패널 ---------- */
+
+.card,
+.panel,
+.widget,
+.chart-card,
+.table-card,
+[class*="-panel"],
+[class*="-card"] {
+  box-shadow: none !important;
+}
+
+/* 너무 강한 테두리 제거 */
+
+.card,
+.panel {
+  border-color:
+    rgba(255, 255, 255, 0.07) !important;
+}
+
+/* ---------- Live feed ---------- */
+
+.live-feed,
+.event-feed,
+[class*="feed"] {
+  background: transparent !important;
+}
+
+.live-feed > *,
+.event-feed > *,
+[class*="event-row"],
+[class*="feed-row"] {
+  background:
+    rgba(14, 15, 18, 0.72) !important;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.065) !important;
+
+  border-radius: 7px !important;
+
+  box-shadow: none !important;
+}
+
+/* ---------- Table ---------- */
+
+table {
+  width: 100%;
+
+  border-collapse: collapse !important;
+
+  background: transparent !important;
+}
+
+thead {
+  background: transparent !important;
+}
+
+th {
+  padding:
+    11px 13px !important;
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.08) !important;
+
+  color: #707075 !important;
+
+  font-size: 10px !important;
+  font-weight: 600 !important;
+
+  letter-spacing: 0.02em !important;
+}
+
+td {
+  padding:
+    12px 13px !important;
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.045) !important;
+
+  color: #c7c7cc !important;
+
+  font-size: 11px !important;
+}
+
+tbody tr {
+  background: transparent !important;
+
+  transition:
+    background 120ms ease;
+}
+
+tbody tr:hover {
+  background:
+    rgba(255, 255, 255, 0.035) !important;
+}
+
+/* ---------- 차트 영역 ---------- */
+
+.chart-container,
+.chart-wrapper,
+[class*="chart-container"],
+[class*="chart-wrapper"] {
+  background: transparent !important;
+
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* 차트 제목 */
+
+.chart-title,
+[class*="chart-title"] {
+  color: #d2d2d7 !important;
+
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+/* Recharts */
+
+.recharts-wrapper text {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif !important;
+}
+
+.recharts-cartesian-grid line {
+  stroke:
+    rgba(255, 255, 255, 0.055) !important;
+}
+
+.recharts-legend-item-text {
+  color: #86868b !important;
+  font-size: 10px !important;
+}
+
+/* ---------- 위험도 색 ---------- */
+
+.risk-low,
+.status-low {
+  color: #30d158 !important;
+}
+
+.risk-medium,
+.status-medium {
+  color: #ffd60a !important;
+}
+
+.risk-high,
+.status-high {
+  color: #ff9f0a !important;
+}
+
+.risk-critical,
+.status-critical {
+  color: #ff453a !important;
+}
+
+/* ---------- Alert ---------- */
+
+.alert,
+.error,
+.error-banner,
+[class*="error-banner"] {
+  border:
+    1px solid rgba(255, 69, 58, 0.22) !important;
+
+  border-radius: 10px !important;
+
+  background:
+    rgba(255, 69, 58, 0.065) !important;
+
+  color: #ff6961 !important;
+
+  box-shadow: none !important;
+}
+
+/* ---------- 입력 ---------- */
+
+input,
+select,
+textarea {
+  border:
+    1px solid rgba(255, 255, 255, 0.11) !important;
+
+  border-radius: 10px !important;
+
+  background:
+    rgba(255, 255, 255, 0.045) !important;
+
+  color: #f5f5f7 !important;
+
+  font-family: inherit !important;
+
+  box-shadow: none !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color:
+    rgba(41, 151, 255, 0.75) !important;
+
+  outline: none !important;
+
+  box-shadow:
+    0 0 0 3px rgba(41, 151, 255, 0.10) !important;
+}
+
+/* ---------- 일반 액션 버튼 ---------- */
+
+button {
+  font-family: inherit !important;
+}
+
+button:not(.sentinel-login-button):not(.sentinel-logout-button) {
+  box-shadow: none !important;
+}
+
+/* 파란 테두리 버튼 느낌 감소 */
+
+button[class*="primary"] {
+  border: 0 !important;
+
+  background:
+    #f5f5f7 !important;
+
+  color:
+    #0a0a0a !important;
+
+  border-radius:
+    980px !important;
+}
+
+/* ---------- 세션 컨트롤 ---------- */
+
+.sentinel-session-control {
+  top: 15px !important;
+  right: 18px !important;
+
+  background:
+    rgba(28, 28, 30, 0.70) !important;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.09) !important;
+
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.22) !important;
+}
+
+/* ---------- 시스템 정상 ---------- */
+
+[class*="system-status"],
+[class*="health-status"] {
+  border:
+    1px solid rgba(48, 209, 88, 0.18) !important;
+
+  background:
+    rgba(48, 209, 88, 0.055) !important;
+
+  color: #30d158 !important;
+
+  border-radius: 980px !important;
+}
+
+/* ---------- 스크롤 ---------- */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050506;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #050506;
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.18);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    rgba(255, 255, 255, 0.27);
+}
+
+/* ---------- 반응형 ---------- */
+
+@media (max-width: 1100px) {
+  .sentinel-session-control {
+    right: 10px !important;
+  }
+}
+
