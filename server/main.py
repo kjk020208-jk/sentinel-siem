@@ -1,3 +1,4 @@
+from server.auth import install_auth
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from time import perf_counter
@@ -109,6 +110,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# SENTINEL 관리자 인증
+install_auth(app)
 
 
 
