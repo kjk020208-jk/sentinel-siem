@@ -1702,3 +1702,560 @@ input[type="checkbox"] {
   }
 }
 
+
+/* =========================================================
+   SENTINEL V4 — EDITORIAL BLACK
+   ========================================================= */
+
+/* 메인 캔버스 */
+.main {
+  background:
+    radial-gradient(
+      900px 420px at 76% -180px,
+      rgba(70,85,120,.09),
+      transparent 65%
+    ),
+    #000 !important;
+}
+
+.content {
+  max-width: 1540px;
+  margin: 0 auto;
+  padding: 18px 48px 70px !important;
+}
+
+/* ---------------------------------------------------------
+   HEADER
+   --------------------------------------------------------- */
+
+.soc-header {
+  padding: 22px 0 30px !important;
+  margin-bottom: 8px !important;
+
+  border-bottom:
+    1px solid rgba(255,255,255,.06) !important;
+}
+
+.soc-title {
+  color: #f5f5f7 !important;
+
+  font-size: 31px !important;
+  line-height: 1.07 !important;
+
+  font-weight: 650 !important;
+  letter-spacing: -.045em !important;
+}
+
+.soc-subtitle {
+  margin-top: 9px !important;
+
+  color: #77777c !important;
+  font-size: 11px !important;
+}
+
+.header-time {
+  color: #48484a !important;
+}
+
+/* ---------------------------------------------------------
+   LIVE
+   --------------------------------------------------------- */
+
+.live-strip {
+  margin-top: 24px !important;
+
+  color: #6e6e73 !important;
+
+  font-size: 10px !important;
+}
+
+.live-strip b {
+  color: #a1a1a6 !important;
+  font-weight: 600 !important;
+}
+
+.feed-label {
+  margin: 15px 0 8px !important;
+
+  color: #48484a !important;
+
+  font-size: 10px !important;
+  font-weight: 600 !important;
+
+  letter-spacing: .08em !important;
+}
+
+.live-feed {
+  gap: 6px !important;
+}
+
+.feed-row {
+  min-height: 39px !important;
+
+  padding: 0 13px !important;
+
+  background:
+    rgba(255,255,255,.024) !important;
+
+  border:
+    1px solid rgba(255,255,255,.055) !important;
+
+  border-radius: 10px !important;
+
+  transition:
+    background .15s ease,
+    border-color .15s ease !important;
+}
+
+.feed-row:hover {
+  background:
+    rgba(255,255,255,.043) !important;
+
+  border-color:
+    rgba(255,255,255,.09) !important;
+}
+
+/* ---------------------------------------------------------
+   SECTION HEADER
+   기존 AI 대시보드식 긴 선 약화
+   --------------------------------------------------------- */
+
+.section-header {
+  margin-top: 38px !important;
+  margin-bottom: 10px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.section-title {
+  flex: 0 0 auto;
+
+  color: #d2d2d7 !important;
+
+  font-size: 12px !important;
+  font-weight: 600 !important;
+
+  letter-spacing: -.015em !important;
+}
+
+.section-line {
+  height: 1px !important;
+
+  background:
+    rgba(255,255,255,.055) !important;
+}
+
+.section-caption {
+  margin-bottom: 18px !important;
+
+  color: #636366 !important;
+
+  font-size: 10px !important;
+  line-height: 1.65 !important;
+}
+
+/* ---------------------------------------------------------
+   KPI
+   5개의 SaaS 카드 → 하나의 통계 스트립
+   --------------------------------------------------------- */
+
+.kpis {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+
+  gap: 0 !important;
+
+  padding: 7px 0 9px !important;
+
+  border-top:
+    1px solid rgba(255,255,255,.055) !important;
+
+  border-bottom:
+    1px solid rgba(255,255,255,.055) !important;
+}
+
+.kpi-card {
+  position: relative;
+
+  min-height: 126px !important;
+
+  padding: 24px 25px !important;
+
+  background: transparent !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  box-shadow: none !important;
+}
+
+.kpi-card + .kpi-card {
+  border-left:
+    1px solid rgba(255,255,255,.055) !important;
+}
+
+.kpi-card:hover {
+  transform: none !important;
+
+  background:
+    rgba(255,255,255,.018) !important;
+}
+
+.kpi-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 18px;
+}
+
+.kpi-label {
+  color: #6e6e73 !important;
+
+  font-size: 10px !important;
+  font-weight: 500 !important;
+}
+
+.kpi-indicator {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
+  background: #48484a;
+}
+
+.kpi-indicator.warning {
+  background: #ff9f0a;
+}
+
+.kpi-indicator.danger {
+  background: #ff453a;
+}
+
+.kpi-value {
+  color: #f5f5f7 !important;
+
+  font-size: 34px !important;
+  line-height: 1 !important;
+
+  font-weight: 600 !important;
+  letter-spacing: -.05em !important;
+}
+
+.kpi-warning {
+  color: #ff9f0a !important;
+}
+
+.kpi-danger {
+  color: #ff453a !important;
+}
+
+.kpi-foot {
+  margin-top: 11px !important;
+
+  color: #48484a !important;
+
+  font-size: 9px !important;
+}
+
+/* ---------------------------------------------------------
+   VISUAL GRID
+   --------------------------------------------------------- */
+
+.visual-grid {
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(0,1fr)
+    minmax(0,1fr)
+    minmax(0,.92fr) !important;
+
+  gap: 18px !important;
+
+  margin-top: 16px !important;
+}
+
+.visual-panel {
+  min-height: 376px !important;
+
+  padding: 22px 22px 15px !important;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.032),
+      rgba(255,255,255,.014)
+    ) !important;
+
+  border:
+    1px solid rgba(255,255,255,.065) !important;
+
+  border-radius: 24px !important;
+
+  overflow: hidden;
+}
+
+.visual-panel-head {
+  min-height: 42px;
+}
+
+.panel-title {
+  color: #d2d2d7 !important;
+
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.panel-subtitle {
+  margin-top: 5px !important;
+
+  color: #5e5e63 !important;
+
+  font-size: 9px !important;
+}
+
+.visual-panel-body {
+  min-height: 295px;
+}
+
+.plotly-donut-area {
+  height: 300px !important;
+}
+
+.plotly-donut {
+  height: 300px !important;
+}
+
+/* Plotly mode/style */
+.js-plotly-plot,
+.plot-container,
+.svg-container {
+  background: transparent !important;
+}
+
+/* ---------------------------------------------------------
+   RISK METER
+   --------------------------------------------------------- */
+
+.risk-meter {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  height: 285px;
+
+  padding: 22px 26px 5px;
+}
+
+.risk-meter-score {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.risk-meter-score strong {
+  color: #f5f5f7;
+
+  font-size: 57px;
+  line-height: .95;
+
+  font-weight: 600;
+
+  letter-spacing: -.065em;
+}
+
+.risk-meter-score span {
+  color: #48484a;
+
+  font-size: 13px;
+}
+
+.risk-meter-level {
+  margin-top: 14px;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  letter-spacing: .08em;
+}
+
+.risk-meter-level.low {
+  color: #2997ff;
+}
+
+.risk-meter-level.medium {
+  color: #ffd60a;
+}
+
+.risk-meter-level.high {
+  color: #ff9f0a;
+}
+
+.risk-meter-level.critical {
+  color: #ff453a;
+}
+
+.risk-meter-track {
+  width: 100%;
+  height: 5px;
+
+  margin-top: 31px;
+
+  overflow: hidden;
+
+  border-radius: 20px;
+
+  background:
+    rgba(255,255,255,.075);
+}
+
+.risk-meter-fill {
+  height: 100%;
+
+  min-width: 4px;
+
+  border-radius: 20px;
+
+  transition: width .35s ease;
+}
+
+.risk-meter-fill.low {
+  background: #2997ff;
+}
+
+.risk-meter-fill.medium {
+  background: #ffd60a;
+}
+
+.risk-meter-fill.high {
+  background: #ff9f0a;
+}
+
+.risk-meter-fill.critical {
+  background: #ff453a;
+}
+
+.risk-meter-scale {
+  display: flex;
+  justify-content: space-between;
+
+  margin-top: 10px;
+
+  color: #48484a;
+
+  font-size: 8px;
+}
+
+/* ---------------------------------------------------------
+   차트 설명
+   --------------------------------------------------------- */
+
+.chart-note {
+  margin-top: 9px !important;
+
+  color: #3a3a3c !important;
+
+  font-size: 9px !important;
+}
+
+/* ---------------------------------------------------------
+   SIDEBAR
+   --------------------------------------------------------- */
+
+.sidebar {
+  background:
+    rgba(3,3,4,.96) !important;
+
+  border-right:
+    1px solid rgba(255,255,255,.05) !important;
+}
+
+.sidebar-brand {
+  padding:
+    32px 18px 28px !important;
+
+  border-bottom:
+    1px solid rgba(255,255,255,.04) !important;
+}
+
+.sidebar-brand-name {
+  color: #f5f5f7 !important;
+
+  font-size: 18px !important;
+  font-weight: 700 !important;
+
+  letter-spacing: .20em !important;
+}
+
+.sidebar-brand-sub {
+  margin-top: 9px !important;
+
+  color: #48484a !important;
+
+  font-size: 8px !important;
+}
+
+.side-section {
+  margin:
+    27px 15px 9px !important;
+
+  color: #48484a !important;
+
+  font-size: 9px !important;
+  font-weight: 600 !important;
+}
+
+.nav-btn {
+  margin: 1px 10px !important;
+
+  min-height: 38px !important;
+
+  color: #86868b !important;
+
+  border-radius: 9px !important;
+}
+
+.nav-btn.active {
+  background:
+    rgba(255,255,255,.085) !important;
+
+  color: #f5f5f7 !important;
+}
+
+/* ---------------------------------------------------------
+   엔진
+   --------------------------------------------------------- */
+
+.engine-row {
+  min-height: 27px !important;
+
+  border-color:
+    rgba(255,255,255,.04) !important;
+
+  color: #8e8e93 !important;
+
+  font-size: 9px !important;
+}
+
+.engine-online {
+  color: #30d158 !important;
+}
+
+.engine-ready {
+  color: #2997ff !important;
+}
+
+/* ---------------------------------------------------------
+   Desktop spacing
+   --------------------------------------------------------- */
+
+@media (min-width: 1450px) {
+  .content {
+    padding-left: 56px !important;
+    padding-right: 56px !important;
+  }
+}
+
