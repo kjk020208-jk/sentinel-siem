@@ -5874,3 +5874,176 @@ textarea:focus{
     left:54px !important;
   }
 }
+
+/* ===== SENTINEL VISIBLE TOGGLE + CLEAN BRAND FINAL ===== */
+
+/* Brand area: same material as the sidebar, no black rectangle */
+.sidebar-head{
+  position:relative !important;
+  display:block !important;
+  min-height:74px !important;
+  margin:0 0 12px !important;
+  padding:20px 54px 18px 12px !important;
+  background:transparent !important;
+  border:0 !important;
+  border-bottom:1px solid rgba(255,255,255,.055) !important;
+  box-shadow:none !important;
+  overflow:visible !important;
+  z-index:200 !important;
+}
+
+.sidebar-brand{
+  display:block !important;
+  width:auto !important;
+  min-width:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  background:transparent !important;
+  background-image:none !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  filter:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  overflow:visible !important;
+}
+
+.sidebar-brand::before,
+.sidebar-brand::after{
+  display:none !important;
+  content:none !important;
+}
+
+.sidebar-brand-name{
+  display:block !important;
+  margin:0 !important;
+  padding:0 !important;
+  background:transparent !important;
+  background-image:none !important;
+  color:#f4f7fb !important;
+  font-size:18px !important;
+  line-height:1.1 !important;
+  font-weight:800 !important;
+  letter-spacing:.17em !important;
+  white-space:nowrap !important;
+}
+
+.sidebar-brand-sub{
+  display:none !important;
+}
+
+/* Toggle: always inside the sidebar, top-right, impossible to clip */
+.sidebar-toggle{
+  position:absolute !important;
+  top:18px !important;
+  right:10px !important;
+  left:auto !important;
+
+  width:34px !important;
+  height:34px !important;
+  min-width:34px !important;
+  min-height:34px !important;
+
+  display:grid !important;
+  place-items:center !important;
+
+  margin:0 !important;
+  padding:0 !important;
+
+  border:1px solid rgba(104,171,255,.36) !important;
+  border-radius:11px !important;
+
+  background:#1c2b3c !important;
+  color:#8fc4ff !important;
+
+  box-shadow:
+    0 8px 22px rgba(0,0,0,.30),
+    inset 0 1px 0 rgba(255,255,255,.07) !important;
+
+  font-size:20px !important;
+  font-weight:500 !important;
+  line-height:1 !important;
+
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+
+  cursor:pointer !important;
+  z-index:99999 !important;
+}
+
+.sidebar-toggle:hover{
+  background:#243b55 !important;
+  color:#fff !important;
+  border-color:rgba(120,190,255,.62) !important;
+}
+
+/* Expanded/collapsed widths */
+.sidebar{
+  width:240px !important;
+  background:#10161e !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  transition:width .24s ease !important;
+}
+
+.main{
+  margin-left:240px !important;
+  width:calc(100% - 240px) !important;
+  transition:margin-left .24s ease,width .24s ease !important;
+}
+
+.sidebar.collapsed{
+  width:76px !important;
+  padding-left:10px !important;
+  padding-right:10px !important;
+}
+
+.app-shell:has(.sidebar.collapsed) .main{
+  margin-left:76px !important;
+  width:calc(100% - 76px) !important;
+}
+
+.sidebar.collapsed .sidebar-head{
+  min-height:65px !important;
+  padding:15px 0 !important;
+  border-bottom:1px solid rgba(255,255,255,.05) !important;
+}
+
+.sidebar.collapsed .sidebar-brand{
+  display:none !important;
+}
+
+.sidebar.collapsed .sidebar-toggle{
+  position:absolute !important;
+  top:15px !important;
+  right:11px !important;
+  left:auto !important;
+}
+
+.sidebar.collapsed .nav-btn{
+  width:46px !important;
+  min-width:46px !important;
+  max-width:46px !important;
+  margin:4px auto !important;
+  padding:0 !important;
+  justify-content:center !important;
+}
+
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .side-section,
+.sidebar.collapsed .engine-row,
+.sidebar.collapsed .sidebar-check,
+.sidebar.collapsed .sidebar-status,
+.sidebar.collapsed .refresh-row,
+.sidebar.collapsed .side-note,
+.sidebar.collapsed .api-line{
+  display:none !important;
+}
+
+/* Slightly brighter sidebar separation */
+.sidebar{
+  border-right:1px solid rgba(118,144,174,.15) !important;
+  box-shadow:10px 0 30px rgba(0,0,0,.16) !important;
+}

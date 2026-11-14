@@ -110,11 +110,6 @@ function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh}){
       <div className="sidebar-head">
         <div className="sidebar-brand">
           <div className="sidebar-brand-name">SENTINEL</div>
-          {!collapsed&&(
-            <div className="sidebar-brand-sub">
-              SIEM / UEBA 보안 관제 플랫폼
-            </div>
-          )}
         </div>
 
         <button
