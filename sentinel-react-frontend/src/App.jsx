@@ -99,30 +99,232 @@ function CriticalAlert({incident,onOpen}){
   if(hidden)return null
   return <div className="critical-alert"><div className="live-alert-top"><div className="live-alert-title">● LIVE CRITICAL INCIDENT</div><div className="live-alert-time">{fmt(incident.last_seen||incident.updated_at||incident.created_at)}</div></div><div className="live-alert-main">{incident.title||incident.incident_type||'보안 사고 감지'}</div><div className="live-alert-meta">확인되지 않은 OPEN CRITICAL Incident가 있습니다.<br/>Incident #{incident.id||incident.incident_id} · 사용자 {incident.user||incident.username||'-'} · Correlation {num(incident.correlation_score).toFixed(1)} · OPEN CRITICAL 1건</div><div className="alert-actions"><button className="btn danger" onClick={onOpen}>사고 상세 보기 · Incident #{incident.id||incident.incident_id}</button><button className="btn ghost" onClick={acknowledge}>확인</button></div></div>
 }
-function Kpi({title,value,hint,warning,danger}){return <div className="kpi-card"><div className="kpi-label">{title}</div><div className={`kpi-value ${warning?'kpi-warning':''} ${danger?'kpi-danger':''}`}>{typeof value==='number'?value.toLocaleString():value}</div><div className="kpi-foot">{hint}</div></div>}
+
+function Kpi({title,value,hint,warning,danger}){
+  return <div className="kpi-card">
+    <div className="kpi-topline">
+      <span className="kpi-label">{title}</span>
+      <span
+        className={`kpi-indicator ${warning?'warning':''} ${danger?'danger':''}`}
+      />
+    </div>
+
+    <div
+      className={`kpi-value ${warning?'kpi-warning':''} ${danger?'kpi-danger':''}`}
+    >
+      {typeof value==='number'
+        ? value.toLocaleString()
+        : value}
+    </div>
+
+    <div className="kpi-foot">
+      {hint}
+    </div>
+  </div>
+}
 function MetricCard({label,value,foot}){return <div className="metric-card"><span>{label}</span><strong>{value}</strong>{foot&&<small>{foot}</small>}</div>}
 function StMetric({label,value,help}){return <div className="st-metric"><div className="st-metric-label">{label}</div><div className="st-metric-value">{typeof value==='number'?value.toLocaleString():value}</div>{help&&<div className="st-metric-help">{help}</div>}</div>}
 function IncidentKpi({label,value,foot}){return <div className="incident-kpi"><div className="incident-kpi-label">{label}</div><div className="incident-kpi-value">{value}</div><div className="incident-kpi-foot">{foot}</div></div>}
-function Panel({title,subtitle,children}){return <section className="panel"><div className="panel-title">{title}</div>{subtitle&&<div className="panel-subtitle">{subtitle}</div>}{children}</section>}
 
+function Panel({title,subtitle,children}){
+  return (
+    <section className="panel visual-panel">
+      <div className="visual-panel-head">
+        <div>
+          <div className="panel-title">
+            {title}
+          </div>
+
+          {subtitle&&(
+            <div className="panel-subtitle">
+              {subtitle}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="visual-panel-body">
+        {children}
+      </div>
+    </section>
+  )
+}
 function PlotlyChart({data,layout={},config={},className=''}){
   const ref=useRef(null)
   useEffect(()=>{
     if(!ref.current)return
-    const baseLayout={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'Pretendard, Noto Sans KR, Segoe UI, sans-serif',color:'#cbd5e1',size:11},margin:{l:45,r:20,t:25,b:45},...layout}
+    const baseLayout={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif',color:'#8e8e93',size:11},margin:{l:45,r:20,t:25,b:45},...layout}
     const baseConfig={responsive:true,displaylogo:false,scrollZoom:true,modeBarButtonsToRemove:['lasso2d','select2d'],...config}
     Plotly.react(ref.current,data,baseLayout,baseConfig)
     return ()=>{try{Plotly.purge(ref.current)}catch{}}
   },[JSON.stringify(data),JSON.stringify(layout),JSON.stringify(config)])
   return <div ref={ref} className={`plotly-host ${className}`}/>
 }
+
 function InteractiveDonut({items,centerTop,centerBottom}){
-  const labels=items.map(x=>x[0]),values=items.map(x=>num(x[1])),total=values.reduce((a,b)=>a+b,0)||1
-  return <div className="donut-area plotly-donut-area"><PlotlyChart className="plotly-donut" data={[{type:'pie',hole:.58,labels,values,textinfo:'percent',textposition:'auto',insidetextorientation:'horizontal',hovertemplate:'<b>%{label}</b><br>%{value}건<br>%{percent}<extra></extra>',sort:false,marker:{line:{color:'#080c14',width:1}}}]} layout={{height:280,showlegend:true,legend:{orientation:'h',x:.5,xanchor:'center',y:-.06,font:{size:10}},margin:{l:8,r:8,t:8,b:52},annotations:[{text:`<b>${centerTop}</b><br><span style="font-size:10px;color:#94a3b8">${centerBottom}</span>`,x:.5,y:.5,showarrow:false,font:{size:18,color:'#f1f5f9'}}]}} config={{displayModeBar:false,scrollZoom:false}}/></div>
+  const labels=items.map(x=>x[0])
+  const values=items.map(x=>num(x[1]))
+
+  const riskPalette={
+    '낮음':'#2997ff',
+    '주의':'#ffd60a',
+    '높음':'#ff9f0a',
+    '심각':'#ff453a',
+  }
+
+  const generalPalette=[
+    '#2997ff',
+    '#64d2ff',
+    '#30d158',
+    '#bf5af2',
+    '#ff9f0a',
+    '#ff375f',
+  ]
+
+  const colors=labels.map(
+    (label,index)=>
+      riskPalette[label]
+      || generalPalette[index%generalPalette.length]
+  )
+
+  return (
+    <div className="donut-area plotly-donut-area">
+      <PlotlyChart
+        className="plotly-donut"
+
+        data={[{
+          type:'pie',
+
+          hole:.73,
+
+          labels,
+          values,
+
+          sort:false,
+          direction:'clockwise',
+
+          textinfo:'none',
+
+          hovertemplate:
+            '<b>%{label}</b><br>'+
+            '%{value}건<br>'+
+            '%{percent}<extra></extra>',
+
+          marker:{
+            colors,
+            line:{
+              color:'#050506',
+              width:4
+            }
+          }
+        }]}
+
+        layout={{
+          height:300,
+
+          showlegend:true,
+
+          legend:{
+            orientation:'h',
+            x:.5,
+            xanchor:'center',
+            y:-.04,
+
+            font:{
+              size:10,
+              color:'#86868b'
+            }
+          },
+
+          margin:{
+            l:18,
+            r:18,
+            t:12,
+            b:52
+          },
+
+          annotations:[{
+            text:
+              `<span style="font-size:31px;font-weight:600;color:#f5f5f7">`+
+              `${centerTop}</span>`+
+              `<br>`+
+              `<span style="font-size:10px;color:#6e6e73">`+
+              `${centerBottom}</span>`,
+
+            x:.5,
+            y:.5,
+
+            showarrow:false,
+            align:'center'
+          }]
+        }}
+
+        config={{
+          displayModeBar:false,
+          scrollZoom:false,
+          responsive:true
+        }}
+      />
+    </div>
+  )
 }
 function RiskDonut({counts}){const labels={LOW:'낮음',MEDIUM:'주의',HIGH:'높음',CRITICAL:'심각'};const items=counts.map(x=>[labels[x[0]]||x[0],x[1]]);return <InteractiveDonut items={items} centerTop={counts.reduce((s,x)=>s+x[1],0)} centerBottom="전체 이벤트"/>}
 function EventTypeDonut({items}){return <InteractiveDonut items={items} centerTop={items[0]?.[0]||'-'} centerBottom="최다유형"/>}
-function Gauge({value}){const v=Math.max(0,Math.min(100,num(value)));const a=Math.PI*(1-v/100);const x=100+78*Math.cos(a),y=100-78*Math.sin(a);const large=v>50?1:0;return <div className="gauge-shell svg-gauge"><svg viewBox="0 0 200 125"><path d="M22 100 A78 78 0 0 1 178 100" fill="none" stroke="#182230" strokeWidth="18"/><path d="M22 100 A78 78 0 0 1 63 31" fill="none" stroke="#1f6b3b" strokeWidth="18"/><path d="M63 31 A78 78 0 0 1 118 24" fill="none" stroke="#6b5d15" strokeWidth="18"/><path d="M118 24 A78 78 0 0 1 156 51" fill="none" stroke="#6b3f15" strokeWidth="18"/><path d="M156 51 A78 78 0 0 1 178 100" fill="none" stroke="#5a1d26" strokeWidth="18"/><path d={`M22 100 A78 78 0 ${large} 1 ${x.toFixed(2)} ${y.toFixed(2)}`} fill="none" stroke="#3187e8" strokeWidth="8" strokeLinecap="round"><title>현재 평균 Risk ${v.toFixed(1)}점</title></path><text x="100" y="94" textAnchor="middle" className="gauge-value">{v.toFixed(1)}점</text><text x="18" y="116" className="gauge-tick">0</text><text x="52" y="48" className="gauge-tick">20</text><text x="82" y="24" className="gauge-tick">40</text><text x="112" y="24" className="gauge-tick">60</text><text x="145" y="48" className="gauge-tick">80</text><text x="174" y="116" className="gauge-tick">100</text></svg></div>}
+
+function Gauge({value}){
+  const v=Math.max(
+    0,
+    Math.min(100,num(value))
+  )
+
+  const level=
+    v>=80
+      ? 'CRITICAL'
+      : v>=65
+        ? 'HIGH'
+        : v>=30
+          ? 'MEDIUM'
+          : 'LOW'
+
+  return (
+    <div className="risk-meter">
+
+      <div className="risk-meter-score">
+        <strong>
+          {v.toFixed(1)}
+        </strong>
+
+        <span>
+          / 100
+        </span>
+      </div>
+
+      <div
+        className={`risk-meter-level ${level.toLowerCase()}`}
+      >
+        {level}
+      </div>
+
+      <div className="risk-meter-track">
+        <div
+          className={`risk-meter-fill ${level.toLowerCase()}`}
+          style={{
+            width:`${Math.max(v,1)}%`
+          }}
+        />
+      </div>
+
+      <div className="risk-meter-scale">
+        <span>0</span>
+        <span>30</span>
+        <span>65</span>
+        <span>80</span>
+        <span>100</span>
+      </div>
+
+    </div>
+  )
+}
 function TopEventTable({events}){return <SimpleTable headers={['발생 시간','사용자','이벤트','위험도','등급']} rows={events.map(e=>[fmt(e.timestamp||e.created_at),e.user||'-',koEvent(e.event_type),num(e.risk_score).toFixed(2),String(e.risk_level||'LOW').toUpperCase()])} short/>}
 function TopUserTable({users}){return <SimpleTable headers={['사용자','최고위험도','평균위험도','이벤트수']} rows={users.map(u=>[u.user,u.max.toFixed(2),u.avg.toFixed(2),u.count])} short/>}
 function AlertTable({events}){return <SimpleTable headers={['탐지 시간','위험 등급','Risk Score','사용자','이벤트 유형','Source IP','파일','프로세스']} rows={events.map(e=>[fmt(e.timestamp||e.created_at),e.risk_level||'-',num(e.risk_score).toFixed(2),e.user||'-',koEvent(e.event_type),e.source_ip||'-',e.file_name||e.file_path||'-',e.process_name||'-'])}/>} 
