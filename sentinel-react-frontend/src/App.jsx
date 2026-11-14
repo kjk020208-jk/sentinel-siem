@@ -31,7 +31,10 @@ function usePolling(fn, interval=3000, refreshKey=0){
 }
 
 export default function App(){
-  const [page,setPage]=useState('overview'),[autoRefresh,setAutoRefresh]=useState(true),[refreshKey,setRefreshKey]=useState(0)
+  const [page,setPage]=useState('overview')
+  const [autoRefresh,setAutoRefresh]=useState(true)
+  const [refreshKey,setRefreshKey]=useState(0)
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false)
   const [eventsRaw,eventsErr,,eventsLatency]=usePolling(api.events,autoRefresh?3000:86400000,refreshKey)
   const [incRaw]=usePolling(api.incidents,autoRefresh?3000:86400000,refreshKey)
   const [usersRaw]=usePolling(api.users,autoRefresh?10000:86400000,refreshKey)
@@ -43,7 +46,7 @@ export default function App(){
   const criticalOpen=incidents.filter(i=>String(i.severity||i.risk_level).toUpperCase()==='CRITICAL'&&String(i.status||'OPEN').toUpperCase()!=='CLOSED').sort((a,b)=>String(b.last_seen||'').localeCompare(String(a.last_seen||''))||num(b.id)-num(a.id))
   const latestIncident=criticalOpen[0]||incidents[0]
   const refresh=()=>setRefreshKey(x=>x+1)
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} refresh={refresh}/><main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
+  return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}><Sidebar page={page} setPage={setPage} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} refresh={refresh} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed}/><main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
     {page==='overview'&&<OverviewV2 events={events} users={users} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
     {page==='events'&&<EventsPage events={events}/>} 
     {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
@@ -52,8 +55,7 @@ export default function App(){
     {page==='cert'&&<CertPage/>}<Footer/></div></main></div>
 }
 
-function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh}){
-  const [collapsed,setCollapsed]=useState(false)
+function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh,collapsed,setCollapsed}){
   const [status,setStatus]=useState('')
   const [resetAllowed,setResetAllowed]=useState(false)
 
@@ -108,14 +110,12 @@ function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh}){
   return (
     <aside className={`sidebar ${collapsed?'collapsed':''}`}>
       <div className="sidebar-head">
-        <div className="sidebar-brand">
-          <div className="sidebar-brand-name">SENTINEL</div>
-          {!collapsed&&(
-            <div className="sidebar-brand-sub">
-              SIEM / UEBA 보안 관제 플랫폼
-            </div>
-          )}
-        </div>
+        {!collapsed&&(
+          <div className="sentinel-wordmark">
+            <div className="sentinel-wordmark-title">SENTINEL</div>
+            <div className="sentinel-wordmark-sub">SIEM / UEBA 보안 관제 플랫폼</div>
+          </div>
+        )}
 
         <button
           type="button"
