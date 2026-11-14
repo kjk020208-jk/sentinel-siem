@@ -44,7 +44,7 @@ export default function App(){
   const latestIncident=criticalOpen[0]||incidents[0]
   const refresh=()=>setRefreshKey(x=>x+1)
   return <div className="app-shell"><Sidebar page={page} setPage={setPage} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} refresh={refresh}/><main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
-    {page==='overview'&&<Overview events={events} users={users} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
+    {page==='overview'&&<OverviewV2 events={events} users={users} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
     {page==='events'&&<EventsPage events={events}/>} 
     {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
     {page==='users'&&<UserAnalysisPage events={events} users={users} refresh={refresh}/>} 
@@ -766,3 +766,479 @@ function CertPage(){const thresholds=[[23.0,27.00,8.64,100],[23.5,22.08,7.35,100
     <SectionHeader>검증 결과 해석</SectionHeader><SimpleTable headers={['평가 관점','결과','해석']} rows={[['대규모 처리','100,000건 처리 완료','교수 피드백의 10만 건 이상 데이터 검증 조건 충족'],['이벤트 단위 탐지','Recall 18.44%','모든 악성 하위 이벤트를 개별 경보로 탐지하지는 않음'],['오탐','FPR 5.79%','탐지 민감도를 높인 만큼 일부 정상 이벤트 오탐 존재'],['공격 흐름 탐지','70/70 · 100%','모든 평가 공격 시나리오에서 최소 1개 이상의 핵심 악성 이벤트 탐지'],['향후 개선','Precision 8.95%','행동 기준선과 맥락 검증을 추가 학습하여 오탐을 더 줄일 필요']]}/><div className="chart-note">평가 기준 · CERT r4.2 통제 샘플 100,000건 · Threshold 24 · 이벤트 단위 및 시나리오 단위 평가 병행</div></>}
 function ThresholdChart({rows}){const vals=rows.map(r=>({x:num(r[0]),f:num(r[2]),s:num(r[3])})),min=23,max=30;return <div className="threshold-chart"><div className="chart-y-label">%</div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><polyline fill="none" stroke="#ef4444" strokeWidth="3" points={vals.map(v=>`${50+(v.x-min)/(max-min)*700},${230-v.f/100*200}`).join(' ')}/><polyline fill="none" stroke="#3b82f6" strokeWidth="3" points={vals.map(v=>`${50+(v.x-min)/(max-min)*700},${230-v.s/100*200}`).join(' ')}/>{vals.map(v=><g key={v.x}><circle cx={50+(v.x-min)/(max-min)*700} cy={230-v.s/100*200} r="4" fill="#3b82f6"/><text x={50+(v.x-min)/(max-min)*700} y="250" fill="#64748b" fontSize="12" textAnchor="middle">{v.x}</text></g>)}</svg><div className="chart-legend"><span><i className="blue"/>Scenario Detection</span><span><i className="red"/>FPR</span></div></div>}
 function Footer(){return <div className="footer"><span>SENTINEL · 내부자 위협 탐지 및 대응 플랫폼</span><span>RULE · ML · UEBA · SEQUENCE · PII · LLM</span></div>}
+
+
+function OverviewV2({events,users,latestIncident,setPage,error,latency}){
+  const levels=['LOW','MEDIUM','HIGH','CRITICAL']
+
+  const counts=levels.map(level=>[
+    level,
+    events.filter(
+      e=>String(e.risk_level||'LOW').toUpperCase()===level
+    ).length
+  ])
+
+  const anomaly=events.filter(
+    e=>num(e.anomaly_score)>=50
+  ).length
+
+  const highCritical=events.filter(
+    e=>['HIGH','CRITICAL'].includes(
+      String(e.risk_level||'').toUpperCase()
+    )
+  ).length
+
+  const critical=counts[3][1]
+
+  const enabledUsers=
+    users.filter(
+      u=>
+        u.monitoring_enabled===true ||
+        u.enabled===true ||
+        u.is_enabled===true
+    ).length ||
+    new Set(events.map(e=>e.user).filter(Boolean)).size
+
+  const avg=events.length
+    ? events.reduce((sum,e)=>sum+num(e.risk_score),0)/events.length
+    : 0
+
+  const latest=events[0]
+
+  const topEvents=events
+    .slice()
+    .sort((a,b)=>num(b.risk_score)-num(a.risk_score))
+    .slice(0,5)
+
+  const userMap={}
+
+  events.forEach(e=>{
+    const user=e.user||'-'
+
+    if(!userMap[user]){
+      userMap[user]={
+        user,
+        count:0,
+        sum:0,
+        max:0
+      }
+    }
+
+    userMap[user].count++
+    userMap[user].sum+=num(e.risk_score)
+    userMap[user].max=Math.max(
+      userMap[user].max,
+      num(e.risk_score)
+    )
+  })
+
+  const topUsers=Object.values(userMap)
+    .map(x=>({
+      ...x,
+      avg:x.count ? x.sum/x.count : 0
+    }))
+    .sort((a,b)=>b.max-a.max||b.avg-a.avg)
+    .slice(0,5)
+
+  const typeMap={}
+
+  events.forEach(e=>{
+    const name=koEvent(e.event_type)
+    typeMap[name]=(typeMap[name]||0)+1
+  })
+
+  const types=Object.entries(typeMap)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,6)
+
+  const bc={
+    OBSERVING:0,
+    ACCEPTED:0,
+    REJECTED:0
+  }
+
+  const seen=new Set()
+
+  const changeRe=/행동 변화 검증:\s*([^/]+?)\s*\/\s*(OBSERVING|ACCEPTED|REJECTED)/g
+
+  events.forEach(e=>{
+    let match
+    const reasons=String(e.reasons||'')
+
+    while((match=changeRe.exec(reasons))){
+      const key=`${e.user}|${match[1].trim()}`
+
+      if(!seen.has(key)){
+        seen.add(key)
+        bc[match[2]]++
+      }
+    }
+
+    changeRe.lastIndex=0
+  })
+
+  const alerts=events.filter(
+    e=>['HIGH','CRITICAL'].includes(
+      String(e.risk_level||'').toUpperCase()
+    )
+  ).slice(0,20)
+
+  const recent60=events.filter(e=>{
+    const time=new Date(
+      e.timestamp||e.created_at
+    ).getTime()
+
+    return (
+      Number.isFinite(time) &&
+      Date.now()-time<=60000
+    )
+  }).length
+
+  const riskState=
+    avg>=80 ? 'CRITICAL' :
+    avg>=65 ? 'HIGH' :
+    avg>=30 ? 'MEDIUM' :
+    'LOW'
+
+  return (
+    <>
+      {latestIncident &&
+       String(
+         latestIncident.severity ||
+         latestIncident.risk_level
+       ).toUpperCase()==='CRITICAL' && (
+        <CriticalAlert
+          incident={latestIncident}
+          onOpen={()=>setPage('incidents')}
+        />
+      )}
+
+      <div className="overview-v2">
+
+        <section className="ov2-hero">
+          <div className="ov2-hero-copy">
+
+            <div className="ov2-eyebrow">
+              <span className={
+                `ov2-status-dot ${
+                  critical>0
+                    ? 'danger'
+                    : highCritical>0
+                      ? 'warning'
+                      : 'ok'
+                }`
+              }/>
+
+              SECURITY OVERVIEW
+            </div>
+
+            <h2>
+              {critical>0
+                ? '즉시 확인이 필요한 보안 이벤트가 있습니다.'
+                : highCritical>0
+                  ? '고위험 활동을 확인하고 있습니다.'
+                  : '현재 보안 상태는 안정적입니다.'}
+            </h2>
+
+            <p>
+              사용자 행동과 엔드포인트 활동을 실시간으로 분석하고
+              이상 징후와 내부자 위협 가능성을 추적합니다.
+            </p>
+
+            <div className="ov2-hero-meta">
+              <span>
+                Latest <b>#{latest?.id??'-'}</b>
+              </span>
+
+              <span>
+                Updated <b>{fmt(latest?.timestamp||latest?.created_at)}</b>
+              </span>
+
+              <span>
+                Critical <b>{critical}</b>
+              </span>
+            </div>
+          </div>
+
+          <div className="ov2-score">
+            <span>AVERAGE RISK</span>
+
+            <div>
+              <strong>{avg.toFixed(1)}</strong>
+              <em>/ 100</em>
+            </div>
+
+            <b className={riskState.toLowerCase()}>
+              {riskState}
+            </b>
+
+            <div className="ov2-score-track">
+              <i
+                className={riskState.toLowerCase()}
+                style={{
+                  width:`${Math.max(1,Math.min(100,avg))}%`
+                }}
+              />
+            </div>
+          </div>
+        </section>
+
+
+        <section className="ov2-metrics">
+          <div className="ov2-stat">
+            <span>Events</span>
+            <strong>{events.length.toLocaleString()}</strong>
+            <small>수집된 보안 이벤트</small>
+          </div>
+
+          <div className="ov2-stat">
+            <span>Anomalies</span>
+            <strong>{anomaly.toLocaleString()}</strong>
+            <small>이상행동 탐지</small>
+          </div>
+
+          <div className="ov2-stat">
+            <span>High Risk</span>
+            <strong className="orange">
+              {highCritical.toLocaleString()}
+            </strong>
+            <small>HIGH + CRITICAL</small>
+          </div>
+
+          <div className="ov2-stat">
+            <span>Users</span>
+            <strong>{enabledUsers.toLocaleString()}</strong>
+            <small>모니터링 사용자</small>
+          </div>
+        </section>
+
+
+        <section className="ov2-block">
+
+          <div className="ov2-section-head">
+            <div>
+              <span>LIVE ACTIVITY</span>
+              <h3>최근 보안 활동</h3>
+            </div>
+
+            <button
+              className="ov2-text-button"
+              type="button"
+              onClick={()=>setPage('events')}
+            >
+              전체 이벤트 보기 →
+            </button>
+          </div>
+
+          <div className="ov2-live-list">
+            {events.slice(0,4).map(e=>(
+              <div className="ov2-live-row" key={e.id}>
+                <span className="ov2-event-id">
+                  #{e.id}
+                </span>
+
+                <span>
+                  {timeOnly(e.timestamp||e.created_at)}
+                </span>
+
+                <b>{e.user||'-'}</b>
+
+                <strong>
+                  {koEvent(e.event_type)}
+                </strong>
+
+                <span>
+                  Risk {num(e.risk_score).toFixed(2)}
+                </span>
+
+                <em className={riskClass(e.risk_level)}>
+                  {String(e.risk_level||'LOW').toUpperCase()}
+                </em>
+              </div>
+            ))}
+
+            {!events.length&&(
+              <div className="ov2-empty">
+                아직 수집된 이벤트가 없습니다.
+              </div>
+            )}
+          </div>
+
+          {error&&(
+            <Notice type="error">
+              API 연결 오류: {error}
+            </Notice>
+          )}
+
+        </section>
+
+
+        <section className="ov2-block">
+
+          <div className="ov2-section-head">
+            <div>
+              <span>ANALYTICS</span>
+              <h3>보안 분석</h3>
+            </div>
+
+            <p>현재 조회 이벤트 기준</p>
+          </div>
+
+          <div className="ov2-analytics">
+
+            <article className="ov2-chart-card">
+              <div className="ov2-card-head">
+                <div>
+                  <span>RISK</span>
+                  <h4>위험 등급 분포</h4>
+                </div>
+
+                <small>{events.length} events</small>
+              </div>
+
+              <RiskDonut counts={counts}/>
+            </article>
+
+
+            <article className="ov2-chart-card">
+              <div className="ov2-card-head">
+                <div>
+                  <span>ACTIVITY</span>
+                  <h4>이벤트 유형</h4>
+                </div>
+
+                <small>{types[0]?.[0]||'-'}</small>
+              </div>
+
+              <EventTypeDonut items={types}/>
+            </article>
+
+
+            <article className="ov2-risk-card">
+              <div className="ov2-card-head">
+                <div>
+                  <span>RISK SCORE</span>
+                  <h4>최근 평균 위험도</h4>
+                </div>
+              </div>
+
+              <Gauge value={avg}/>
+            </article>
+
+          </div>
+
+        </section>
+
+
+        <section className="ov2-block">
+
+          <div className="ov2-section-head">
+            <div>
+              <span>PRIORITY</span>
+              <h3>우선 확인 항목</h3>
+            </div>
+          </div>
+
+          <div className="ov2-table-grid">
+
+            <article className="ov2-data-card">
+              <div className="ov2-data-title">
+                위험도 상위 이벤트
+              </div>
+
+              <TopEventTable events={topEvents}/>
+            </article>
+
+
+            <article className="ov2-data-card">
+              <div className="ov2-data-title">
+                현재 위험 사용자
+              </div>
+
+              <TopUserTable users={topUsers}/>
+            </article>
+
+          </div>
+
+        </section>
+
+
+        <section className="ov2-block">
+
+          <div className="ov2-section-head">
+            <div>
+              <span>BASELINE</span>
+              <h3>행동 변화 검증</h3>
+            </div>
+          </div>
+
+          <div className="ov2-behavior">
+            <div>
+              <span>관찰 중</span>
+              <strong>{bc.OBSERVING}</strong>
+            </div>
+
+            <div>
+              <span>정상 승인</span>
+              <strong>{bc.ACCEPTED}</strong>
+            </div>
+
+            <div>
+              <span>학습 제외</span>
+              <strong>{bc.REJECTED}</strong>
+            </div>
+          </div>
+
+        </section>
+
+
+        <section className="ov2-block">
+          <div className="ov2-section-head">
+            <div>
+              <span>ALERTS</span>
+              <h3>주요 보안 경보</h3>
+            </div>
+          </div>
+
+          <AlertTable events={alerts}/>
+        </section>
+
+
+        <section className="ov2-block">
+          <div className="ov2-section-head">
+            <div>
+              <span>EVENT HISTORY</span>
+              <h3>최근 보안 이벤트</h3>
+            </div>
+          </div>
+
+          <EventTable
+            events={events.slice(0,50)}
+            tall
+          />
+        </section>
+
+
+        <div className="ov2-operations">
+          <span>
+            60 sec <b>{recent60}</b>
+          </span>
+
+          <span>
+            EPS <b>{(recent60/60).toFixed(2)}</b>
+          </span>
+
+          <span>
+            API{' '}
+            <b>
+              {latency==null
+                ? '-'
+                : `${latency.toFixed(1)} ms`}
+            </b>
+          </span>
+        </div>
+
+      </div>
+    </>
+  )
+}
