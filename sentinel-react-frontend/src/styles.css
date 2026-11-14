@@ -1246,3 +1246,459 @@ button[class*="primary"] {
   }
 }
 
+
+/* =========================================================
+   SENTINEL V3 — BLACK GLASS / EDITORIAL SOC
+   ========================================================= */
+
+/* 전체 */
+body {
+  background: #000 !important;
+  color: #f5f5f7 !important;
+}
+
+.sentinel-authenticated-shell {
+  background:
+    radial-gradient(
+      900px 500px at 70% -180px,
+      rgba(75, 92, 120, .12),
+      transparent 60%
+    ),
+    #000 !important;
+}
+
+/* ---------------------------------------------------------
+   메인 영역: 회색 판 느낌 제거
+   --------------------------------------------------------- */
+
+main,
+.main,
+.content,
+.main-content,
+.dashboard-content {
+  background: transparent !important;
+}
+
+/* 콘텐츠 좌우 여백 확보 */
+.main-content,
+.dashboard-content {
+  padding-left: 42px !important;
+  padding-right: 42px !important;
+}
+
+/* ---------------------------------------------------------
+   헤더
+   --------------------------------------------------------- */
+
+h1 {
+  font-size: 32px !important;
+  line-height: 1.05 !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.05em !important;
+}
+
+h2 {
+  font-size: 18px !important;
+  letter-spacing: -0.035em !important;
+}
+
+h3 {
+  font-size: 14px !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* 헤더 밑 선을 거의 안 보이게 */
+header,
+.page-header,
+.dashboard-header {
+  border-color: rgba(255,255,255,.045) !important;
+}
+
+/* ---------------------------------------------------------
+   사이드바 — Apple 설정앱보다 더 단순하게
+   --------------------------------------------------------- */
+
+aside,
+.sidebar,
+[class*="sidebar"] {
+  width: 264px !important;
+
+  background:
+    rgba(5,5,7,.94) !important;
+
+  border-right:
+    1px solid rgba(255,255,255,.055) !important;
+
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+}
+
+aside button,
+.sidebar button,
+nav button {
+  min-height: 36px !important;
+  margin: 2px 10px !important;
+
+  border-radius: 8px !important;
+
+  color: #8e8e93 !important;
+
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+aside button:hover,
+.sidebar button:hover,
+nav button:hover {
+  background: rgba(255,255,255,.04) !important;
+  color: #f5f5f7 !important;
+}
+
+aside button.active,
+.sidebar button.active,
+aside button[class*="active"],
+.sidebar button[class*="active"] {
+  background:
+    rgba(255,255,255,.09) !important;
+
+  color: #fff !important;
+}
+
+/* 메뉴 전체가 버튼처럼 보이지 않도록 */
+aside button,
+.sidebar button {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* SENTINEL 워드마크 */
+.sidebar-brand,
+[class*="brand"] {
+  padding-top: 28px !important;
+  padding-bottom: 26px !important;
+}
+
+.sidebar-brand h1,
+[class*="brand"] h1 {
+  font-size: 18px !important;
+  letter-spacing: .20em !important;
+}
+
+/* ---------------------------------------------------------
+   KPI 영역 — 박스 5개 느낌 약화
+   --------------------------------------------------------- */
+
+.metric-card,
+.stat-card,
+.summary-card,
+[class*="metric-card"],
+[class*="stat-card"],
+[class*="summary-card"] {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.035),
+      rgba(255,255,255,.018)
+    ) !important;
+
+  border:
+    1px solid rgba(255,255,255,.065) !important;
+
+  border-radius: 20px !important;
+
+  padding: 22px 20px !important;
+}
+
+.metric-card:hover,
+.stat-card:hover {
+  transform: translateY(-1px);
+
+  background:
+    rgba(255,255,255,.045) !important;
+}
+
+/* KPI 숫자는 더 크게, 설명은 더 작게 */
+.metric-card .value,
+.stat-card .value,
+[class*="metric"] [class*="value"] {
+  font-size: 31px !important;
+  line-height: 1 !important;
+
+  font-weight: 600 !important;
+}
+
+.metric-card .label,
+.stat-card .label {
+  margin-bottom: 16px !important;
+
+  color: #8e8e93 !important;
+
+  font-size: 11px !important;
+}
+
+/* ---------------------------------------------------------
+   섹션
+   --------------------------------------------------------- */
+
+section {
+  margin-top: 32px !important;
+}
+
+/* 모든 구분선을 강조하지 않음 */
+section,
+[class*="section"] {
+  border-color:
+    rgba(255,255,255,.045) !important;
+}
+
+/* ---------------------------------------------------------
+   LIVE FEED
+   --------------------------------------------------------- */
+
+.live-feed,
+.event-feed {
+  display: grid;
+  gap: 5px;
+}
+
+[class*="event-row"],
+[class*="feed-row"] {
+  min-height: 36px;
+
+  background:
+    rgba(255,255,255,.022) !important;
+
+  border:
+    1px solid rgba(255,255,255,.055) !important;
+
+  border-radius: 9px !important;
+}
+
+[class*="event-row"]:hover,
+[class*="feed-row"]:hover {
+  background:
+    rgba(255,255,255,.04) !important;
+}
+
+/* ---------------------------------------------------------
+   DONUT — 핵심 변경
+   --------------------------------------------------------- */
+
+/* 차트 전체 박스 제거 */
+.chart-card,
+.chart-container,
+.chart-wrapper,
+[class*="chart-card"],
+[class*="chart-container"],
+[class*="chart-wrapper"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* 도넛 path 사이 경계를 검정으로 매우 얇게 */
+.recharts-pie-sector path,
+.recharts-sector {
+  stroke: #050506 !important;
+  stroke-width: 2px !important;
+
+  transition:
+    opacity 150ms ease,
+    filter 150ms ease,
+    transform 150ms ease;
+}
+
+/* hover 시 과한 튀어나옴 대신 밝기만 */
+.recharts-pie-sector:hover path,
+.recharts-sector:hover {
+  filter: brightness(1.12);
+}
+
+/* 범례 */
+.recharts-legend-wrapper {
+  margin-top: 14px !important;
+}
+
+.recharts-legend-item {
+  margin-right: 18px !important;
+}
+
+.recharts-legend-item-text {
+  color: #77777c !important;
+  font-size: 10px !important;
+}
+
+/* chart text */
+.recharts-text,
+.recharts-pie-label-text {
+  fill: #a1a1a6 !important;
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif !important;
+
+  font-size: 10px !important;
+}
+
+/* tooltip */
+.recharts-default-tooltip {
+  padding: 10px 12px !important;
+
+  background:
+    rgba(28,28,30,.90) !important;
+
+  border:
+    1px solid rgba(255,255,255,.10) !important;
+
+  border-radius: 12px !important;
+
+  box-shadow:
+    0 14px 50px rgba(0,0,0,.35) !important;
+
+  backdrop-filter: blur(24px);
+}
+
+/* ---------------------------------------------------------
+   차트 3개 영역 자체를 더 고급스럽게
+   --------------------------------------------------------- */
+
+[class*="chart-grid"],
+[class*="charts-grid"],
+[class*="overview-grid"] {
+  gap: 48px !important;
+}
+
+/* 각 차트는 떠 있는 느낌 */
+[class*="chart-section"] {
+  padding:
+    8px 14px 28px !important;
+}
+
+/* ---------------------------------------------------------
+   테이블
+   --------------------------------------------------------- */
+
+table {
+  background: transparent !important;
+}
+
+th {
+  color: #636366 !important;
+
+  font-size: 10px !important;
+  font-weight: 500 !important;
+
+  border-bottom:
+    1px solid rgba(255,255,255,.06) !important;
+}
+
+td {
+  color: #c7c7cc !important;
+
+  border-bottom:
+    1px solid rgba(255,255,255,.035) !important;
+}
+
+tbody tr:hover {
+  background:
+    rgba(255,255,255,.025) !important;
+}
+
+/* ---------------------------------------------------------
+   위험도 색 — 채도 살짝 낮춤
+   --------------------------------------------------------- */
+
+.risk-low,
+.status-low {
+  color: #32d74b !important;
+}
+
+.risk-medium,
+.status-medium {
+  color: #ffd60a !important;
+}
+
+.risk-high,
+.status-high {
+  color: #ff9f0a !important;
+}
+
+.risk-critical,
+.status-critical {
+  color: #ff453a !important;
+}
+
+/* ---------------------------------------------------------
+   관리자 세션 pill
+   --------------------------------------------------------- */
+
+.sentinel-session-control {
+  top: 14px !important;
+  right: 24px !important;
+
+  padding: 5px 6px 5px 11px !important;
+
+  background:
+    rgba(30,30,32,.72) !important;
+
+  border:
+    1px solid rgba(255,255,255,.085) !important;
+
+  box-shadow:
+    0 12px 45px rgba(0,0,0,.35) !important;
+}
+
+.sentinel-logout-button {
+  background:
+    rgba(255,255,255,.08) !important;
+
+  color: #d2d2d7 !important;
+}
+
+.sentinel-logout-button:hover {
+  background:
+    rgba(255,255,255,.14) !important;
+}
+
+/* ---------------------------------------------------------
+   체크박스
+   --------------------------------------------------------- */
+
+input[type="checkbox"] {
+  accent-color: #f5f5f7;
+}
+
+/* ---------------------------------------------------------
+   스크롤바
+   --------------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 7px !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background:
+    rgba(255,255,255,.15) !important;
+
+  border-radius: 20px !important;
+}
+
+/* ---------------------------------------------------------
+   작은 화면
+   --------------------------------------------------------- */
+
+@media (max-width: 1200px) {
+  .main-content,
+  .dashboard-content {
+    padding-left: 26px !important;
+    padding-right: 26px !important;
+  }
+}
+
