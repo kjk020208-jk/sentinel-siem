@@ -121,3 +121,561 @@ html,body,#root,button,input,select,textarea{
 .section-caption,.chart-note,.panel-subtitle,.kpi-foot,.side-note,.api-line{
   line-height:1.5;
 }
+
+/* =========================================================
+   SENTINEL — Dark Precision UI
+   Apple-inspired restrained dark interface
+   ========================================================= */
+
+:root {
+  color-scheme: dark;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    "Inter",
+    "Segoe UI",
+    sans-serif;
+
+  --sentinel-bg: #000000;
+  --sentinel-surface: #0b0b0d;
+  --sentinel-surface-2: #111113;
+  --sentinel-surface-3: #171719;
+
+  --sentinel-text: #f5f5f7;
+  --sentinel-secondary: #a1a1a6;
+  --sentinel-muted: #6e6e73;
+
+  --sentinel-line: rgba(255, 255, 255, 0.09);
+  --sentinel-line-soft: rgba(255, 255, 255, 0.055);
+
+  --sentinel-blue: #2997ff;
+  --sentinel-green: #30d158;
+  --sentinel-orange: #ff9f0a;
+  --sentinel-red: #ff453a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+  background: var(--sentinel-bg);
+}
+
+body {
+  background:
+    radial-gradient(
+      circle at 70% -20%,
+      rgba(60, 60, 75, 0.15),
+      transparent 34%
+    ),
+    #000;
+  color: var(--sentinel-text);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------------------------------------------------------
+   전체 Dashboard
+   --------------------------------------------------------- */
+
+[class*="dashboard"],
+[class*="content"],
+main {
+  letter-spacing: -0.012em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: #f5f5f7;
+  letter-spacing: -0.035em;
+}
+
+h1 {
+  font-weight: 650;
+}
+
+h2,
+h3 {
+  font-weight: 600;
+}
+
+p,
+small,
+[class*="subtitle"],
+[class*="description"] {
+  color: var(--sentinel-secondary);
+}
+
+/* ---------------------------------------------------------
+   패널 / 카드
+   --------------------------------------------------------- */
+
+[class*="card"],
+[class*="panel"],
+[class*="metric"],
+[class*="stat"] {
+  box-shadow: none !important;
+}
+
+[class*="card"],
+[class*="metric-card"],
+[class*="stat-card"] {
+  background:
+    rgba(18, 18, 20, 0.82) !important;
+  border:
+    1px solid var(--sentinel-line) !important;
+  border-radius: 18px !important;
+}
+
+/* ---------------------------------------------------------
+   Sidebar — 버튼 박스 느낌 제거
+   --------------------------------------------------------- */
+
+aside,
+[class*="sidebar"] {
+  background:
+    rgba(7, 7, 9, 0.96) !important;
+  border-right:
+    1px solid var(--sentinel-line-soft) !important;
+  box-shadow: none !important;
+}
+
+[class*="sidebar"] button,
+aside button,
+nav button {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  transition:
+    background 160ms ease,
+    color 160ms ease !important;
+}
+
+[class*="sidebar"] button:hover,
+aside button:hover,
+nav button:hover {
+  background:
+    rgba(255, 255, 255, 0.055) !important;
+}
+
+[class*="sidebar"] button[class*="active"],
+aside button[class*="active"],
+nav button[class*="active"] {
+  background:
+    rgba(255, 255, 255, 0.095) !important;
+  border-color:
+    rgba(255, 255, 255, 0.04) !important;
+}
+
+/* ---------------------------------------------------------
+   일반 버튼
+   --------------------------------------------------------- */
+
+button {
+  font-family: inherit;
+}
+
+button:not(.sentinel-login-button):not(.sentinel-logout-button) {
+  box-shadow: none !important;
+}
+
+/* ---------------------------------------------------------
+   Tables
+   --------------------------------------------------------- */
+
+table {
+  border-collapse: collapse;
+}
+
+th {
+  color: #8e8e93 !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+}
+
+td,
+th {
+  border-color:
+    rgba(255, 255, 255, 0.065) !important;
+}
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
+.sentinel-login {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle at 50% -10%,
+      #16161a 0,
+      #08080a 38%,
+      #000 72%
+    );
+}
+
+.sentinel-login-glow {
+  position: absolute;
+  z-index: -1;
+  border-radius: 999px;
+  filter: blur(120px);
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.sentinel-login-glow-a {
+  width: 500px;
+  height: 500px;
+  background: #2997ff;
+  top: -340px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.sentinel-login-glow-b {
+  width: 420px;
+  height: 420px;
+  background: #7868e6;
+  right: -330px;
+  bottom: -270px;
+  opacity: 0.07;
+}
+
+.sentinel-login-content {
+  width: min(430px, calc(100vw - 44px));
+  padding: 60px 0 48px;
+  text-align: center;
+}
+
+.sentinel-login-brand {
+  margin-bottom: 34px;
+
+  color: #f5f5f7;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.sentinel-login-content h1 {
+  margin: 0;
+
+  color: #f5f5f7;
+  font-size: clamp(34px, 5vw, 48px);
+  line-height: 1.03;
+  font-weight: 650;
+  letter-spacing: -0.045em;
+}
+
+.sentinel-login-description {
+  max-width: 390px;
+  margin: 20px auto 38px;
+
+  color: #86868b;
+  font-size: 15px;
+  line-height: 1.65;
+  letter-spacing: -0.015em;
+}
+
+.sentinel-login-form {
+  display: grid;
+  gap: 13px;
+  text-align: left;
+}
+
+.sentinel-login-form label {
+  display: block;
+}
+
+.sentinel-login-form label span {
+  display: block;
+  margin: 0 0 8px 4px;
+
+  color: #a1a1a6;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sentinel-login-form input {
+  width: 100%;
+  height: 52px;
+
+  padding: 0 16px;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 13px;
+
+  outline: none;
+
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  color: #f5f5f7;
+
+  font-family: inherit;
+  font-size: 15px;
+
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.sentinel-login-form input::placeholder {
+  color: #606065;
+}
+
+.sentinel-login-form input:focus {
+  border-color:
+    rgba(41, 151, 255, 0.8);
+
+  background:
+    rgba(255, 255, 255, 0.075);
+
+  box-shadow:
+    0 0 0 4px rgba(41, 151, 255, 0.12);
+}
+
+.sentinel-login-button {
+  height: 50px;
+  margin-top: 8px;
+
+  border: 0;
+  border-radius: 980px;
+
+  cursor: pointer;
+
+  background: #f5f5f7;
+  color: #080808;
+
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+
+  transition:
+    transform 130ms ease,
+    background 130ms ease,
+    opacity 130ms ease;
+}
+
+.sentinel-login-button:hover {
+  background: #fff;
+}
+
+.sentinel-login-button:active {
+  transform: scale(0.985);
+}
+
+.sentinel-login-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.sentinel-login-error {
+  padding: 11px 14px;
+
+  border:
+    1px solid rgba(255, 69, 58, 0.25);
+  border-radius: 11px;
+
+  background:
+    rgba(255, 69, 58, 0.08);
+
+  color: #ff6961;
+
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sentinel-login-security {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+
+  margin-top: 28px;
+
+  color: #6e6e73;
+  font-size: 11px;
+}
+
+.sentinel-login-dot {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+  background: #30d158;
+
+  box-shadow:
+    0 0 0 4px rgba(48, 209, 88, 0.08);
+}
+
+.sentinel-login-footer {
+  margin-top: 52px;
+
+  color: #48484a;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* =========================================================
+   SESSION CONTROL
+   ========================================================= */
+
+.sentinel-session-control {
+  position: fixed;
+  z-index: 9999;
+  top: 14px;
+  right: 20px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 6px 7px 6px 11px;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 980px;
+
+  background:
+    rgba(20, 20, 22, 0.72);
+
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.sentinel-session-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  color: #a1a1a6;
+  font-size: 11px;
+}
+
+.sentinel-session-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #30d158;
+}
+
+.sentinel-logout-button {
+  padding: 7px 12px;
+
+  border: 0;
+  border-radius: 980px;
+
+  cursor: pointer;
+
+  background:
+    rgba(255, 255, 255, 0.085);
+
+  color: #f5f5f7;
+
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.sentinel-logout-button:hover {
+  background:
+    rgba(255, 255, 255, 0.14);
+}
+
+/* =========================================================
+   AUTH LOADING
+   ========================================================= */
+
+.sentinel-auth-loading {
+  min-height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+
+  background: #000;
+}
+
+.sentinel-auth-wordmark {
+  color: #f5f5f7;
+
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.sentinel-auth-spinner {
+  width: 20px;
+  height: 20px;
+
+  border:
+    2px solid rgba(255, 255, 255, 0.12);
+
+  border-top-color:
+    rgba(255, 255, 255, 0.75);
+
+  border-radius: 50%;
+
+  animation:
+    sentinel-spin 700ms linear infinite;
+}
+
+@keyframes sentinel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------
+   Scrollbar
+   --------------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background:
+    rgba(255, 255, 255, 0.18);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    rgba(255, 255, 255, 0.26);
+  background-clip: padding-box;
+}
+
