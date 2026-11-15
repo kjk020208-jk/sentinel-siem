@@ -171,8 +171,17 @@ async def sentinel_admin_auth(request: Request, call_next):
     if request.method == "OPTIONS" or request.url.path == "/health":
         return await call_next(request)
 
-    # Agent ingestion has its own X-Agent-Token authentication.
-    if request.method == "POST" and request.url.path == "/events":
+    # Windows Agents use X-Agent-Token authentication.
+    agent_paths = (
+        request.url.path == "/events"
+        or request.url.path == "/response-controls/claim"
+        or (
+            request.url.path.startswith("/response-controls/")
+            and request.url.path.endswith("/result")
+        )
+    )
+
+    if request.method == "POST" and agent_paths:
         return await call_next(request)
 
     # Local development remains compatible until admin credentials are set.
@@ -3960,7 +3969,17 @@ def queue_response_control(
 def claim_response_control(
     body: ResponseControlClaim,
     db: Session = Depends(get_db),
+    x_agent_token: Optional[str] = Header(default=None, alias="X-Agent-Token"),
 ):
+    if SENTINEL_AGENT_TOKEN:
+        if not x_agent_token or not secrets.compare_digest(
+            x_agent_token, SENTINEL_AGENT_TOKEN
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="유효하지 않은 SENTINEL Agent Token입니다.",
+            )
+
     action = claim_next_action(db, hostname=body.hostname)
     return {"action": action}
 
@@ -3970,7 +3989,17 @@ def report_response_control_result(
     action_id: int,
     body: ResponseControlResult,
     db: Session = Depends(get_db),
+    x_agent_token: Optional[str] = Header(default=None, alias="X-Agent-Token"),
 ):
+    if SENTINEL_AGENT_TOKEN:
+        if not x_agent_token or not secrets.compare_digest(
+            x_agent_token, SENTINEL_AGENT_TOKEN
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="유효하지 않은 SENTINEL Agent Token입니다.",
+            )
+
     import base64
     from pathlib import Path
 

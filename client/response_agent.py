@@ -10,9 +10,16 @@ import time
 import requests
 
 API_URL = os.getenv("SENTINEL_API_URL", "http://127.0.0.1:8000").rstrip("/")
+AGENT_TOKEN = os.getenv("SENTINEL_AGENT_TOKEN", "").strip()
 POLL_SECONDS = float(os.getenv("SENTINEL_RESPONSE_POLL_SECONDS", "2"))
 HOSTNAME = socket.gethostname()
 USERNAME = getpass.getuser()
+
+
+def agent_headers():
+    if not AGENT_TOKEN:
+        return {}
+    return {"X-Agent-Token": AGENT_TOKEN}
 
 
 def is_windows():
@@ -156,6 +163,7 @@ def report_result(action, success, message, active_window, processes, screenshot
     r = requests.post(
         f"{API_URL}/response-controls/{action['id']}/result",
         json=payload,
+        headers=agent_headers(),
         timeout=30,
     )
     r.raise_for_status()
@@ -165,6 +173,7 @@ def run_once():
     r = requests.post(
         f"{API_URL}/response-controls/claim",
         json={"hostname": HOSTNAME, "username": USERNAME},
+        headers=agent_headers(),
         timeout=10,
     )
     r.raise_for_status()
