@@ -6047,3 +6047,192 @@ textarea:focus{
   border-right:1px solid rgba(118,144,174,.15) !important;
   box-shadow:10px 0 30px rgba(0,0,0,.16) !important;
 }
+
+/* ===== SENTINEL GLOBAL SIDEBAR TOGGLE DEFINITIVE FIX ===== */
+
+/* App-level toggle: sibling of sidebar and main, so sidebar overflow cannot hide it */
+.global-sidebar-toggle{
+  position:fixed !important;
+  top:24px !important;
+  left:218px !important;
+  z-index:2147483000 !important;
+
+  width:38px !important;
+  height:38px !important;
+  min-width:38px !important;
+  min-height:38px !important;
+
+  display:grid !important;
+  place-items:center !important;
+
+  padding:0 !important;
+  margin:0 !important;
+
+  border:1px solid rgba(105,170,255,.42) !important;
+  border-radius:12px !important;
+
+  background:#1a2b3d !important;
+  color:#9acbff !important;
+
+  box-shadow:
+    0 10px 28px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.09) !important;
+
+  font-size:22px !important;
+  line-height:1 !important;
+  font-weight:500 !important;
+
+  cursor:pointer !important;
+
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+
+  transition:
+    left .24s cubic-bezier(.2,.8,.2,1),
+    transform .15s ease,
+    background .15s ease !important;
+}
+
+.global-sidebar-toggle:hover{
+  background:#24435f !important;
+  color:#fff !important;
+  transform:scale(1.04) !important;
+}
+
+.app-shell.sidebar-collapsed .global-sidebar-toggle{
+  left:58px !important;
+}
+
+/* Definitive layout widths */
+.sidebar{
+  width:240px !important;
+  transition:width .24s cubic-bezier(.2,.8,.2,1) !important;
+}
+
+.main{
+  margin-left:240px !important;
+  width:calc(100% - 240px) !important;
+  transition:
+    margin-left .24s cubic-bezier(.2,.8,.2,1),
+    width .24s cubic-bezier(.2,.8,.2,1) !important;
+}
+
+.app-shell.sidebar-collapsed .sidebar{
+  width:76px !important;
+  padding-left:10px !important;
+  padding-right:10px !important;
+}
+
+.app-shell.sidebar-collapsed .main{
+  margin-left:76px !important;
+  width:calc(100% - 76px) !important;
+}
+
+/* No old internal toggle may appear */
+.sidebar-toggle{
+  display:none !important;
+}
+
+/* Clean brand: title only */
+.sidebar-head{
+  min-height:74px !important;
+  padding:23px 14px 17px !important;
+  margin:0 0 12px !important;
+  background:transparent !important;
+  border:0 !important;
+  border-bottom:1px solid rgba(255,255,255,.055) !important;
+  box-shadow:none !important;
+}
+
+.sidebar-brand{
+  margin:0 !important;
+  padding:0 !important;
+  background:transparent !important;
+  background-image:none !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+.sidebar-brand::before,
+.sidebar-brand::after{
+  display:none !important;
+  content:none !important;
+}
+
+.sidebar-brand-name{
+  margin:0 !important;
+  padding:0 !important;
+  color:#f5f7fa !important;
+  background:transparent !important;
+  font-size:18px !important;
+  line-height:1.1 !important;
+  font-weight:800 !important;
+  letter-spacing:.17em !important;
+}
+
+.sidebar-brand-sub{
+  display:none !important;
+}
+
+.app-shell.sidebar-collapsed .sidebar-head{
+  min-height:64px !important;
+  padding:0 !important;
+  border-bottom:1px solid rgba(255,255,255,.05) !important;
+}
+
+.app-shell.sidebar-collapsed .sidebar-brand{
+  display:none !important;
+}
+
+.app-shell.sidebar-collapsed .nav-label,
+.app-shell.sidebar-collapsed .side-section,
+.app-shell.sidebar-collapsed .engine-row,
+.app-shell.sidebar-collapsed .sidebar-check,
+.app-shell.sidebar-collapsed .sidebar-status,
+.app-shell.sidebar-collapsed .refresh-row,
+.app-shell.sidebar-collapsed .side-note,
+.app-shell.sidebar-collapsed .api-line{
+  display:none !important;
+}
+
+.app-shell.sidebar-collapsed .nav-btn{
+  width:46px !important;
+  min-width:46px !important;
+  max-width:46px !important;
+  margin:4px auto !important;
+  padding:0 !important;
+  justify-content:center !important;
+}
+
+/* Smaller desktop */
+@media(max-width:1200px){
+  .sidebar{
+    width:220px !important;
+  }
+
+  .main{
+    margin-left:220px !important;
+    width:calc(100% - 220px) !important;
+  }
+
+  .global-sidebar-toggle{
+    left:198px !important;
+  }
+
+  .app-shell.sidebar-collapsed .sidebar{
+    width:72px !important;
+  }
+
+  .app-shell.sidebar-collapsed .main{
+    margin-left:72px !important;
+    width:calc(100% - 72px) !important;
+  }
+
+  .app-shell.sidebar-collapsed .global-sidebar-toggle{
+    left:54px !important;
+  }
+}

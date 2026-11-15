@@ -32,6 +32,7 @@ function usePolling(fn, interval=3000, refreshKey=0){
 
 export default function App(){
   const [page,setPage]=useState('overview'),[autoRefresh,setAutoRefresh]=useState(true),[refreshKey,setRefreshKey]=useState(0)
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false)
   const [eventsRaw,eventsErr,,eventsLatency]=usePolling(api.events,autoRefresh?3000:86400000,refreshKey)
   const [incRaw]=usePolling(api.incidents,autoRefresh?3000:86400000,refreshKey)
   const [usersRaw]=usePolling(api.users,autoRefresh?10000:86400000,refreshKey)
@@ -43,7 +44,25 @@ export default function App(){
   const criticalOpen=incidents.filter(i=>String(i.severity||i.risk_level).toUpperCase()==='CRITICAL'&&String(i.status||'OPEN').toUpperCase()!=='CLOSED').sort((a,b)=>String(b.last_seen||'').localeCompare(String(a.last_seen||''))||num(b.id)-num(a.id))
   const latestIncident=criticalOpen[0]||incidents[0]
   const refresh=()=>setRefreshKey(x=>x+1)
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} refresh={refresh}/><main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
+  return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>
+    <button
+      type="button"
+      className="global-sidebar-toggle"
+      onClick={()=>setSidebarCollapsed(v=>!v)}
+      title={sidebarCollapsed?'메뉴 펼치기':'메뉴 접기'}
+      aria-label={sidebarCollapsed?'메뉴 펼치기':'메뉴 접기'}
+    >
+      {sidebarCollapsed?'☰':'‹'}
+    </button>
+    <Sidebar
+      page={page}
+      setPage={setPage}
+      autoRefresh={autoRefresh}
+      setAutoRefresh={setAutoRefresh}
+      refresh={refresh}
+      collapsed={sidebarCollapsed}
+    />
+    <main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
     {page==='overview'&&<OverviewV2 events={events} users={users} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
     {page==='events'&&<EventsPage events={events}/>} 
     {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
@@ -52,8 +71,7 @@ export default function App(){
     {page==='cert'&&<CertPage/>}<Footer/></div></main></div>
 }
 
-function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh}){
-  const [collapsed,setCollapsed]=useState(false)
+function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh,collapsed}){
   const [status,setStatus]=useState('')
   const [resetAllowed,setResetAllowed]=useState(false)
 
@@ -112,14 +130,7 @@ function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh}){
           <div className="sidebar-brand-name">SENTINEL</div>
         </div>
 
-        <button
-          type="button"
-          className="sidebar-toggle"
-          onClick={()=>setCollapsed(v=>!v)}
-          title={collapsed?'메뉴 펼치기':'메뉴 접기'}
-        >
-          {collapsed?'☰':'‹'}
-        </button>
+
       </div>
 
       {!collapsed&&<div className="side-section">보안 관제</div>}
