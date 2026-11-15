@@ -6230,3 +6230,58 @@ textarea:focus{
     grid-column:1 / -1 !important;
   }
 }
+
+/* ===== SENTINEL MINIMAL LOGIN FINAL ===== */
+
+/* Keep only SENTINEL branding above the form. */
+.sentinel-login-content h1,
+.sentinel-login-description{
+  display:none !important;
+}
+
+/* Remove excessive title-area spacing created by the old hero copy. */
+.sentinel-login-content{
+  width:min(390px,calc(100vw - 40px)) !important;
+  padding-top:0 !important;
+}
+
+.sentinel-login-brand{
+  margin:0 0 42px !important;
+  padding:0 0 24px !important;
+
+  color:#f5f5f7 !important;
+  font-size:19px !important;
+  line-height:1 !important;
+  font-weight:760 !important;
+  letter-spacing:.24em !important;
+
+  border-bottom:1px solid rgba(255,255,255,.055) !important;
+}
+
+/* Form sits directly beneath SENTINEL. */
+.sentinel-login-form{
+  margin-top:0 !important;
+}
+
+/* Slightly tighter, cleaner login composition. */
+.sentinel-login-form label{
+  margin:0 !important;
+}
+
+.sentinel-login-form label + label{
+  margin-top:14px !important;
+}
+
+.sentinel-login-button{
+  margin-top:18px !important;
+}
+
+/* Keep security notice subtle. */
+.sentinel-login-security{
+  margin-top:25px !important;
+}
+
+/* Footer becomes less visually distracting. */
+.sentinel-login-footer{
+  opacity:.58 !important;
+}
