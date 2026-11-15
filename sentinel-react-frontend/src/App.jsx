@@ -37,6 +37,7 @@ export default function App(){
   const [eventSummaryRaw]=usePolling(api.eventSummary,autoRefresh?3000:86400000,refreshKey)
   const [incRaw]=usePolling(api.incidents,autoRefresh?3000:86400000,refreshKey)
   const [usersRaw]=usePolling(api.users,autoRefresh?10000:86400000,refreshKey)
+  const [behaviorChangesRaw]=usePolling(api.behaviorChanges,autoRefresh?10000:86400000,refreshKey)
   const rawEvents=arr(eventsRaw,['events','items','value']).slice().sort((a,b)=>num(b.id)-num(a.id))
   const incidents=arr(incRaw,['incidents','items','value'])
   const users=arr(usersRaw,['users','items','value'])
@@ -64,7 +65,7 @@ export default function App(){
       collapsed={sidebarCollapsed}
     />
     <main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
-    {page==='overview'&&<OverviewV2 events={events} users={users} summary={eventSummaryRaw} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
+    {page==='overview'&&<OverviewV2 events={events} users={users} summary={eventSummaryRaw} behaviorChanges={behaviorChangesRaw} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
     {page==='events'&&<EventsPage events={events} monitoredUsers={users} summary={eventSummaryRaw}/>} 
     {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
     {page==='users'&&<UserAnalysisPage events={events} users={users} refresh={refresh}/>} 
@@ -1004,7 +1005,7 @@ function ThresholdChart({rows}){const vals=rows.map(r=>({x:num(r[0]),f:num(r[2])
 function Footer(){return <div className="footer"><span>SENTINEL · 내부자 위협 탐지 및 대응 플랫폼</span><span>RULE · ML · UEBA · SEQUENCE · PII · LLM</span></div>}
 
 
-function OverviewV2({events,users,summary,latestIncident,setPage,error,latency}){
+function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage,error,latency}){
   const levels=['LOW','MEDIUM','HIGH','CRITICAL']
 
   const counts=levels.map(level=>[
@@ -1087,31 +1088,33 @@ function OverviewV2({events,users,summary,latestIncident,setPage,error,latency})
     .sort((a,b)=>b[1]-a[1])
     .slice(0,6)
 
-  const bc={
-    OBSERVING:0,
-    ACCEPTED:0,
-    REJECTED:0
-  }
+  const behaviorRows=arr(
+    behaviorChanges,
+    ['items','value','behavior_changes']
+  )
 
-  const seen=new Set()
+  const bc=behaviorRows.reduce(
+    (acc,row)=>{
+      const status=String(
+        row?.status||''
+      ).toUpperCase()
 
-  const changeRe=/행동 변화 검증:\s*([^/]+?)\s*\/\s*(OBSERVING|ACCEPTED|REJECTED)/g
-
-  events.forEach(e=>{
-    let match
-    const reasons=String(e.reasons||'')
-
-    while((match=changeRe.exec(reasons))){
-      const key=`${e.user}|${match[1].trim()}`
-
-      if(!seen.has(key)){
-        seen.add(key)
-        bc[match[2]]++
+      if(status==='OBSERVING'){
+        acc.OBSERVING++
+      }else if(status==='ACCEPTED'){
+        acc.ACCEPTED++
+      }else if(status==='REJECTED'){
+        acc.REJECTED++
       }
-    }
 
-    changeRe.lastIndex=0
-  })
+      return acc
+    },
+    {
+      OBSERVING:0,
+      ACCEPTED:0,
+      REJECTED:0
+    }
+  )
 
   const alerts=events.filter(
     e=>['HIGH','CRITICAL'].includes(
@@ -1403,7 +1406,7 @@ function OverviewV2({events,users,summary,latestIncident,setPage,error,latency})
 
           <div className="ov2-section-head">
             <div>
-              <span>BASELINE</span>
+              <span>BEHAVIOR CHANGE</span>
               <h3>행동 변화 검증</h3>
             </div>
           </div>
