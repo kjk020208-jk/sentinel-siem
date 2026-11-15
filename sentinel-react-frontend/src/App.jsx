@@ -841,7 +841,7 @@ function JsonNarrative({data}){
 }
 
 function UserAnalysisPage({events,users,refresh}){
-  const[form,setForm]=useState({username:'',display_name:'',department:'',role:''}),[msg,setMsg]=useState(''),[selected,setSelected]=useState(''),[profile,setProfile]=useState(null),[dyn,setDyn]=useState(null),[adaptive,setAdaptive]=useState(null),[busy,setBusy]=useState(false),[registerOpen,setRegisterOpen]=useState(false),[tableMode,setTableMode]=useState(false),[deleteConfirm,setDeleteConfirm]=useState({})
+  const[form,setForm]=useState({username:'',display_name:'',department:'',role:''}),[msg,setMsg]=useState(''),[selected,setSelected]=useState(''),[profile,setProfile]=useState(null),[dyn,setDyn]=useState(null),[registerOpen,setRegisterOpen]=useState(false),[tableMode,setTableMode]=useState(false),[deleteConfirm,setDeleteConfirm]=useState({})
   useEffect(()=>{if(!selected&&users[0])setSelected(users[0].username||users[0].user)},[users])
   useEffect(()=>{
     if(!selected)return
@@ -876,7 +876,6 @@ function UserAnalysisPage({events,users,refresh}){
   const create=async e=>{e.preventDefault();if(!form.username.trim())return;try{await api.createUser(form);setMsg(`${form.username.trim()} 사용자를 모니터링 대상으로 등록했습니다. 개인 행동 기준선 학습이 시작됩니다.`);setForm({username:'',display_name:'',department:'',role:''});setRegisterOpen(false);refresh()}catch(e){setMsg(`등록 실패: ${e.message}`)}}
   const toggle=async(u,en)=>{try{await api.setUserEnabled(u,en);refresh()}catch(e){setMsg(e.message)}}
   const remove=async u=>{if(!deleteConfirm[u])return;try{await api.deleteUser(u);setMsg('사용자를 삭제했습니다.');setDeleteConfirm(x=>({...x,[u]:false}));refresh()}catch(e){setMsg(e.message)}}
-  const runAdaptive=async()=>{setBusy(true);try{setAdaptive(await api.adaptiveCompare())}catch(e){setMsg(e.message)}finally{setBusy(false)}}
   const userEvents=arr(
     profile?._dashboard_recent_events,
     ['events','items','value']
@@ -904,7 +903,7 @@ function UserAnalysisPage({events,users,refresh}){
     <div className="section-caption">비활성화하면 새 /events 수집을 차단합니다. 삭제해도 기존 SecurityEvent 감사 이력은 보존됩니다.</div><div className="user-view-switch"><button className={`mini-btn ${!tableMode?'active-mini':''}`} onClick={()=>setTableMode(false)}>카드 보기</button><button className={`mini-btn ${tableMode?'active-mini':''}`} onClick={()=>setTableMode(true)}>표 보기</button></div>
     {!tableMode?<div className="monitored-user-list">{users.map((u,i)=>{const name=u.username||u.user||'-',display=u.display_name||name,enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled),ls=String(u.learning_status||'LEARNING').toUpperCase();return <div className="monitored-user-row" key={name}><div className="baseline-summary user-admin-card"><div className="baseline-top"><div><div className="baseline-user">{display}</div><div className="baseline-meta">계정 {name} · {u.department||'-'} · {u.role||'-'} · 정상 학습 {num(u.learning_event_count).toLocaleString()}개 · 가중치 {num(u.confidence_weight,.25).toFixed(2)}</div></div><span className="baseline-badge">{ls} · {enabled?'활성':'비활성'}</span></div></div><div className="user-control-stack"><button className="btn primary user-action-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성화':'활성화'}</button><label className="delete-confirm-inline"><input type="checkbox" checked={Boolean(deleteConfirm[name])} onChange={e=>setDeleteConfirm(x=>({...x,[name]:e.target.checked}))}/> 삭제 확인</label><button className="btn ghost user-delete-btn" disabled={!deleteConfirm[name]} onClick={()=>remove(name)}>삭제</button></div></div>})}</div>:<SimpleTable headers={['사용자','표시 이름','부서','역할','모니터링','학습 상태','관리']} rows={users.map(u=>{const name=u.username||u.user||'-',enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled);return [name,u.display_name||'-',u.department||'-',u.role||'-',enabled?'활성':'비활성',u.learning_status||'-',<span key={name}><button className="mini-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성':'활성'}</button><button className="mini-btn danger-mini" onClick={()=>setDeleteConfirm(x=>({...x,[name]:true}))}>삭제</button></span>]})}/>} 
     <SectionHeader>Adaptive Personal UEBA</SectionHeader><Field label="분석할 모니터링 사용자를 선택하세요."><select value={selected} onChange={e=>setSelected(e.target.value)}>{users.map(u=><option key={u.username||u.user} value={u.username||u.user}>{u.display_name||u.username||u.user}</option>)}</select></Field>{selected&&<><div className="baseline-summary"><div className="baseline-top"><div><div className="baseline-user">{users.find(u=>String(u.username||u.user)===String(selected))?.display_name||selected}</div><div className="baseline-meta">계정 {selected} · {users.find(u=>String(u.username||u.user)===String(selected))?.department||'-'} · {users.find(u=>String(u.username||u.user)===String(selected))?.role||'-'} · 모니터링 활성</div></div><span className="baseline-badge">BASELINE {profile?.confidence_level||profile?.learning_status||'-'}</span></div></div><SectionHeader>개인 행동 기준선 학습 상태</SectionHeader><ProfileView profile={profile} eventCount={selectedUserEventTotal}/><SectionHeader>Dynamic User Risk</SectionHeader><DynamicRiskView data={dyn} events={userEvents}/><SectionHeader>개별 이벤트 위험 지표</SectionHeader><div className="kpis compact"><Kpi title="전체 이벤트" value={selectedUserEventTotal.toLocaleString()} hint="선택 사용자의 전체 DB 이벤트"/><Kpi title="평균 Risk" value={userAvg.toFixed(1)} hint="사용자 평균 위험점수"/><Kpi title="최고 Risk" value={userMax.toFixed(1)} hint="관찰된 최고 위험도"/><Kpi title="고위험 이벤트" value={userEvents.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length} hint="HIGH + CRITICAL"/></div><UserRiskAnalysis events={userEvents}/><SectionHeader>사용자 활동 이력</SectionHeader><EventTable events={userEvents.slice(0,100)} tall/></>}
-    <SectionHeader>Adaptive Personal UEBA 비교 시연</SectionHeader><div className="adaptive-demo-shell teaser"><div className="adaptive-demo-head">동일 행동 · 서로 다른 개인 기준선</div><div className="adaptive-demo-sub">23:00 PowerShell 실행이라는 동일 행동을 일반 주간 사무직 사용자와 재택/유연근무 IT 사용자의 개인 기준선과 Adaptive 보정 결과로 비교합니다.</div></div><div className="adaptive-run-row"><button className="btn primary" disabled={busy} onClick={runAdaptive}>{busy?'비교 실행 중...':'Adaptive 비교 실행'}</button><div className="section-caption">고정 Rule은 두 사용자 모두 23시를 비정상 시간대로 판단하지만, 충분히 학습된 개인 정상 패턴과 일치하는 경우에만 시간 규칙의 기여도를 제한적으로 보정합니다.</div></div>{adaptive&&<AdaptiveCompare data={adaptive}/>}</>
+    <SectionHeader>Peer Group UEBA · 동일 직무 비교</SectionHeader><div className="section-caption">선택 사용자를 같은 부서·같은 역할의 활성 모니터링 사용자들과 비교합니다. 개인 기준선과 Peer Group 기준선을 함께 사용해 개인에게는 익숙하지만 동일 직무 집단에서는 드문 행동도 확인합니다.</div><PeerGroupView profile={profile}/></>
 }
 function ProfileView({profile,eventCount=0}){
   if(!profile)return <Notice>Behavior Profile 데이터를 불러오는 중이거나 기준선이 아직 없습니다.</Notice>
@@ -943,7 +942,172 @@ function LineSvg({rows,yTitle='Risk Score',xTitle='시간'}){
   return <div className="plotly-line-shell"><PlotlyChart className="plotly-line" data={[{type:'scatter',mode:'lines+markers',x,y,hovertemplate:`<b>${xTitle}</b> %{x}<br><b>${yTitle}</b> %{y:.2f}<extra></extra>`,line:{width:2},marker:{size:5}}]} layout={{height:320,margin:{l:60,r:20,t:18,b:58},xaxis:{title:{text:xTitle,font:{size:10}},type:'date',gridcolor:'#1b2532',showgrid:true,zeroline:false,rangeslider:{visible:false}},yaxis:{title:{text:yTitle,font:{size:10}},gridcolor:'#25303d',zeroline:false},dragmode:'zoom',hovermode:'x unified'}} config={{scrollZoom:true,displayModeBar:true}}/></div>
 }
 
-function AdaptiveCompare({data}){const office=data.office_demo||{},flex=data.flex_demo||{},same=data.same_behavior||{};return <div className="adaptive-demo-shell"><div className="adaptive-demo-head">동일 행동 · 서로 다른 개인 기준선</div><div className="adaptive-demo-sub">{same.description||objText(same)}</div><div className="adaptive-grid">{[[office,'office_demo','office'],[flex,'flex_demo','flex']].map(([x,name,cls])=><div className={`adaptive-demo-card adaptive-demo-${cls}`} key={name}><div className="adaptive-demo-type">{x.user_type||'-'}</div><div className="adaptive-demo-user">{name}</div><div className="adaptive-demo-row"><span>Baseline Score</span><b>{x.baseline_score??0}</b></div><div className="adaptive-demo-row"><span>개인 기준선 판정</span><b>{x.judgment||'-'}</b></div><div className="adaptive-demo-row"><span>Baseline 신뢰도</span><b>{x.confidence_level||'-'}</b></div><div className="adaptive-demo-row"><span>Adaptive 보정</span><b>-{num(x.adaptive_compensation)} · {x.adaptive_applied?'적용':'미적용'}</b></div><div className="adaptive-demo-reason">{arr(x.adaptive_reasons).join(' · ')||'-'}</div></div>)}</div>{data.comparison?.security_guard&&<Notice>{data.comparison.security_guard}</Notice>}</div>}
+function PeerGroupView({profile}){
+  const peer=profile?._peer_group||{}
+  const comparison=peer?.latest_comparison||{}
+  const available=Boolean(peer?.available)
+  const applied=Boolean(comparison?.applied)
+  const peerUsers=arr(peer?.peer_users)
+  const personalHours=arr(profile?.active_hours)
+  const peerHours=arr(peer?.active_hours)
+  const personalProcesses=arr(profile?.normal_processes)
+  const peerProcesses=arr(peer?.normal_processes)
+
+  const fmtHours=v=>v.length
+    ? v.map(h=>`${String(Number(h)).padStart(2,'0')}시`).join(', ')
+    : '데이터 없음'
+
+  const fmtList=v=>v.length?v.join(', '):'데이터 없음'
+
+  const personalFile=num(
+    profile?.average_file_access??profile?.avg_file_access
+  ).toFixed(1)
+
+  const peerFile=num(peer?.average_file_access).toFixed(1)
+
+  let personalUsb=num(profile?.usb_usage_rate)
+  if(personalUsb<=1)personalUsb*=100
+
+  const peerUsb=num(peer?.usb_usage_rate_percent)
+
+  const score=num(comparison?.score)
+  const judgment=!available
+    ? 'PEER 학습 부족'
+    : !applied
+      ? '비교 보류'
+      : score>=60
+        ? '동일 직무 대비 큰 이탈'
+        : score>=30
+          ? '동일 직무 대비 주의'
+          : score>0
+            ? '동일 직무 대비 경미한 차이'
+            : '동일 직무 정상 범위'
+
+  return <>
+    <div className="baseline-summary">
+      <div className="baseline-top">
+        <div>
+          <div className="baseline-user">Peer Group UEBA</div>
+          <div className="baseline-meta">
+            같은 부서 + 같은 역할의 활성 사용자와 비교 · 본인 제외
+          </div>
+        </div>
+        <span className="baseline-badge">
+          {available?'PEER READY':'PEER LEARNING'}
+        </span>
+      </div>
+    </div>
+
+    <div className="kpis compact">
+      <Kpi
+        title="Peer Group"
+        value={peer?.group_key||'-'}
+        hint="Department / Role"
+      />
+      <Kpi
+        title="Peer 사용자"
+        value={num(peer?.peer_user_count)}
+        hint={`최소 ${num(peer?.minimum_peer_users,2)}명 필요`}
+      />
+      <Kpi
+        title="Peer 학습 이벤트"
+        value={num(peer?.peer_event_count).toLocaleString()}
+        hint={`LOW 정상 이벤트 · 최소 ${num(peer?.minimum_peer_events,20)}건`}
+      />
+      <Kpi
+        title="Peer Group Score"
+        value={score.toFixed(1)}
+        hint={judgment}
+      />
+    </div>
+
+    {!available&&
+      <Notice type="warning">
+        동일 부서·역할의 Peer가 충분하지 않아 Peer Group 점수를 적용하지 않습니다.
+        현재 비교 대상: {peerUsers.length?peerUsers.join(', '):'없음'}
+      </Notice>
+    }
+
+    {available&&<>
+      <div className="section-caption">
+        비교 대상 · {peerUsers.join(', ')}
+      </div>
+
+      <div className="normal-profile-grid">
+        <BaselineCard
+          label="활동 시간 · 개인"
+          value={fmtHours(personalHours)}
+          foot="선택 사용자의 정상 시간 패턴"
+        />
+        <BaselineCard
+          label="활동 시간 · Peer"
+          value={fmtHours(peerHours)}
+          foot="동일 직무 그룹의 정상 시간 패턴"
+        />
+        <BaselineCard
+          label="정상 프로세스 · 개인"
+          value={fmtList(personalProcesses)}
+          foot="선택 사용자의 반복 정상 프로세스"
+        />
+        <BaselineCard
+          label="정상 프로세스 · Peer"
+          value={fmtList(peerProcesses)}
+          foot="동일 직무 그룹의 반복 정상 프로세스"
+        />
+        <BaselineCard
+          label="평균 파일 접근 · 개인"
+          value={`${personalFile}회`}
+          foot="개인 정상 기준"
+        />
+        <BaselineCard
+          label="평균 파일 접근 · Peer"
+          value={`${peerFile}회`}
+          foot="동일 직무 그룹 정상 기준"
+        />
+        <BaselineCard
+          label="USB 사용률 · 개인"
+          value={`${personalUsb.toFixed(1)}%`}
+          foot="개인 LOW 학습 이벤트 기준"
+        />
+        <BaselineCard
+          label="USB 사용률 · Peer"
+          value={`${peerUsb.toFixed(1)}%`}
+          foot="Peer LOW 학습 이벤트 기준"
+        />
+      </div>
+
+      <SectionHeader>최신 이벤트 Peer Group 판정</SectionHeader>
+      <div className="kpis compact">
+        <Kpi
+          title="비교 Event"
+          value={comparison?.event_id??'-'}
+          hint={koEvent(comparison?.event_type)}
+        />
+        <Kpi
+          title="Peer Score"
+          value={score.toFixed(1)}
+          hint="동일 직무 정상 패턴 이탈 점수"
+        />
+        <Kpi
+          title="적용 상태"
+          value={applied?'APPLIED':'NOT APPLIED'}
+          hint="Peer Group UEBA 적용 여부"
+        />
+        <Kpi
+          title="판정"
+          value={judgment}
+          hint="동일 직무 사용자 대비"
+        />
+      </div>
+
+      <Notice type={score>=30?'warning':'success'}>
+        {arr(comparison?.reasons).length
+          ? arr(comparison?.reasons).join(' · ')
+          : '동일 직무 Peer Group 정상 패턴과 비교할 추가 이탈 근거가 없습니다.'}
+      </Notice>
+    </>}
+  </>
+}
 
 function BehaviorPage(){
   const[rows,setRows]=useState([]),[err,setErr]=useState(''),[status,setStatus]=useState('전체'),[user,setUser]=useState('전체'),[type,setType]=useState('전체'),[selected,setSelected]=useState(''),[note,setNote]=useState(''),[msg,setMsg]=useState('')

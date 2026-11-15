@@ -1953,6 +1953,71 @@ def get_behavior_profile(
     profile["_dashboard_total_event_count"] = total_event_count
     profile["_dashboard_recent_events"] = recent_events
 
+    # Dashboard Peer Group UEBA
+    peer_profile = get_peer_group_profile(
+        db=db,
+        user=user
+    )
+
+    latest_event = (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user == user)
+        .order_by(SecurityEvent.id.desc())
+        .first()
+    )
+
+    peer_comparison = {
+        "available": False,
+        "applied": False,
+        "score": 0,
+        "reasons": [],
+        "event_id": None,
+        "event_type": None,
+        "timestamp": None,
+    }
+
+    if latest_event is not None:
+        peer_result = analyze_peer_group_baseline(
+            db=db,
+            user=user,
+            current_ip=latest_event.source_ip,
+            current_hour=(
+                latest_event.timestamp.hour
+                if latest_event.timestamp is not None
+                else datetime.now().hour
+            ),
+            current_file_access_count=(
+                latest_event.file_access_count or 0
+            ),
+            current_process_name=latest_event.process_name,
+            current_usb_connected=(
+                latest_event.usb_connected or 0
+            ),
+            current_timestamp=(
+                latest_event.timestamp or datetime.now()
+            ),
+        )
+
+        peer_comparison = {
+            **peer_result,
+            "event_id": latest_event.id,
+            "event_type": latest_event.event_type,
+            "timestamp": latest_event.timestamp,
+            "process_name": latest_event.process_name,
+            "source_ip": latest_event.source_ip,
+            "file_access_count": (
+                latest_event.file_access_count or 0
+            ),
+            "usb_connected": (
+                latest_event.usb_connected or 0
+            ),
+        }
+
+    profile["_peer_group"] = {
+        **peer_profile,
+        "latest_comparison": peer_comparison,
+    }
+
     return profile
 
 
