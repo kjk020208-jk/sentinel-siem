@@ -8,12 +8,13 @@ const PAGE_META = {
   incidents: ['보안 사고 분석', 'Incident Correlation · Attack Storyline · 연관 이벤트 · AI 보조 분석'],
   users: ['사용자 행동 분석', '사용자별 행동 패턴 · 위험도 · 활동 이력 분석'],
   behavior: ['행동 변화 승인 관리', 'Human-in-the-loop · 예외 승인 · 위험 유지 · 재관찰'],
+  soar: ['SOAR 대응 제어', '실제 엔드포인트 제어 · 해제 요청 · 관리자 승인 · 자동 롤백'],
   cert: ['CERT 100K 성능 검증', 'CERT Insider Threat Dataset r4.2 · 100,000건 기반 탐지 성능 평가'],
 }
 
 const MENU = [
   ['overview','보안 현황'], ['events','이벤트 모니터링'], ['incidents','보안 사고 분석'],
-  ['users','사용자 행동 분석'], ['behavior','행동 승인 관리'], ['cert','CERT 100K 검증']
+  ['users','사용자 행동 분석'], ['behavior','행동 승인 관리'], ['soar','SOAR 대응 제어'], ['cert','CERT 100K 검증']
 ]
 
 const koEvent=(v='-')=>({login_success:'로그인 성공',login_failure:'로그인 실패',login_failed:'로그인 실패',process_execution:'프로세스 실행',file_access:'파일 접근',usb_connected:'USB 연결',usb_connection:'USB 연결',document_analysis:'문서 분석'}[String(v).toLowerCase()]||v||'-')
@@ -70,6 +71,7 @@ export default function App(){
     {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
     {page==='users'&&<UserAnalysisPage events={events} users={users} refresh={refresh}/>} 
     {page==='behavior'&&<BehaviorPage/>} 
+    {page==='soar'&&<SoarControlPage/>} 
     {page==='cert'&&<CertPage/>}<Footer/></div></main></div>
 }
 
@@ -95,6 +97,7 @@ function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh,collapsed}){
     incidents:'◆',
     users:'◎',
     behavior:'✓',
+    soar:'↯',
     cert:'C'
   }
 
@@ -667,7 +670,7 @@ function IncidentsPage({incidents,allEvents=[],initialId}){
     <div className="incident-kpi-grid"><IncidentKpi label="Correlation Score" value={num(inc.correlation_score).toFixed(0)} foot="다중 이벤트 상관분석"/><IncidentKpi label="공격 단계" value={story.length} foot="Storyline 단계 수"/><IncidentKpi label="연관 이벤트" value={evs.length} foot="사고에 연결된 이벤트"/><IncidentKpi label="최대 Event Risk" value={Math.max(0,...evs.map(e=>num(e.risk_score))).toFixed(2)} foot={String(evs.slice().sort((a,b)=>num(b.risk_score)-num(a.risk_score))[0]?.risk_level||'-')}/></div>
     <SectionHeader>Attack Storyline</SectionHeader><div className="section-caption">Sequence Detection이 실시간 공격 순서를 점수화한다면, Incident Correlation은 저장된 여러 이벤트를 조사 가능한 공격 스토리로 재구성합니다.</div><Storyline events={story} eventLookup={eventLookup}/>
     <SectionHeader>AI SOC Analyst</SectionHeader><div className="section-caption">OpenAI API가 선택한 Incident의 Storyline, Event Risk, MITRE ATT&CK, Dynamic User Risk를 함께 해석합니다. AI는 탐지 점수를 결정하지 않고 조사 의사결정을 보조합니다.</div><button type="button" className="btn primary incident-ai-button" disabled={aiBusy} onClick={runIncidentAI}>{aiBusy?'OpenAI API가 Incident 전체 증거를 분석하고 있습니다...':'Incident 전체 AI 분석 실행'}</button>{incidentAiError&&<Notice type="error">AI SOC 분석 실패 · {incidentAiError}</Notice>}{ai&&<IncidentAIReport response={ai}/>}
-    <SectionHeader>Response Playbook · SOAR-lite</SectionHeader><div className="section-caption">Incident 유형과 증거에 따라 사전 정의된 대응 절차를 추천합니다. 현재 MVP는 실제 계정 잠금·네트워크 차단을 자동 실행하지 않으며, 관리자 승인과 처리 상태를 기록합니다.</div><PlaybookView data={playbook} incidentId={id} onAction={updateStep}/>
+    <SectionHeader>Response Playbook · SOAR</SectionHeader><div className="section-caption">Incident 대응 절차를 관리하며, 실제 엔드포인트 제어는 Response Agent를 통해 실행됩니다. 현재 실제 검증된 제어는 USB 쓰기 제한과 관리자 승인 후 자동 해제입니다.</div><PlaybookView data={playbook} incidentId={id} onAction={updateStep}/>
     <SectionHeader>연관 이벤트</SectionHeader><EventTable events={evs} tall/>
     <SectionHeader>연관 이벤트 상세 분석</SectionHeader>{evs.length>0&&<RelatedEventDetail events={evs} selectedEvent={selectedEvent} setSelectedEvent={v=>{setSelectedEvent(v);setEventExplain(null);setEventAI(null);setEventAiError('')}} onExplain={explainEvent} onAI={aiEvent} explanation={eventExplain} ai={eventAI} aiError={eventAiError} aiBusy={eventAiBusy}/>}
 
@@ -1106,6 +1109,184 @@ function PeerGroupView({profile}){
           : '동일 직무 Peer Group 정상 패턴과 비교할 추가 이탈 근거가 없습니다.'}
       </Notice>
     </>}
+  </>
+}
+
+
+function SoarControlPage(){
+  const SOAR_API='https://api.sentineljk.co.kr'
+  const[rows,setRows]=useState([])
+  const[err,setErr]=useState('')
+  const[msg,setMsg]=useState('')
+  const[busy,setBusy]=useState('')
+  const[note,setNote]=useState('업무 필요성 및 증거 확인 후 관리자 승인')
+
+  const call=async(path,options={})=>{
+    const response=await fetch(`${SOAR_API}${path}`,{
+      credentials:'include',
+      ...options,
+      headers:{
+        ...(options.body?{'Content-Type':'application/json'}:{}),
+        ...(options.headers||{})
+      }
+    })
+    let data=null
+    try{data=await response.json()}catch{}
+    if(!response.ok){
+      throw new Error(data?.detail||data?.message||`HTTP ${response.status}`)
+    }
+    return data
+  }
+
+  const load=async()=>{
+    try{
+      const data=await call('/response-controls?limit=100')
+      setRows(arr(data,['items','value','response_controls']))
+      setErr('')
+    }catch(e){
+      setErr(e.message)
+    }
+  }
+
+  useEffect(()=>{
+    load()
+    const id=setInterval(load,3000)
+    return()=>clearInterval(id)
+  },[])
+
+  const decide=async(id,decision)=>{
+    if(!id||busy)return
+    setBusy(`${id}:${decision}`)
+    setMsg('')
+    try{
+      await call(`/response-controls/${id}/release-decision`,{
+        method:'POST',
+        body:JSON.stringify({
+          decision,
+          admin_note:note||null
+        })
+      })
+      setMsg(
+        decision==='APPROVE'
+          ? `해제 요청 #${id} 승인 완료 · RELEASE 작업이 Agent 큐에 등록되었습니다.`
+          : `해제 요청 #${id} 거절 완료`
+      )
+      await load()
+    }catch(e){
+      setErr(e.message)
+    }finally{
+      setBusy('')
+    }
+  }
+
+  const ordered=[...rows].sort((a,b)=>num(b.id)-num(a.id))
+  const awaiting=ordered.filter(r=>String(r.status||'').toUpperCase()==='AWAITING_ADMIN')
+  const completed=ordered.filter(r=>String(r.status||'').toUpperCase()==='COMPLETED')
+  const queued=ordered.filter(r=>['QUEUED','CLAIMED'].includes(String(r.status||'').toUpperCase()))
+  const failed=ordered.filter(r=>String(r.status||'').toUpperCase()==='FAILED')
+
+  const statusKo=v=>({
+    QUEUED:'대기',
+    CLAIMED:'Agent 수신',
+    COMPLETED:'실행 완료',
+    FAILED:'실행 실패',
+    AWAITING_ADMIN:'관리자 승인 대기',
+    REJECTED:'해제 거절'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const operationKo=v=>String(v||'').toUpperCase()==='RELEASE'?'해제':'적용'
+
+  return <>
+    <SectionHeader>실행형 SOAR 제어 현황</SectionHeader>
+    <div className="section-caption">
+      Railway 중앙 제어 큐와 Windows Response Agent를 연결해 실제 엔드포인트 정책을 적용합니다.
+      현재 검증된 실행 제어는 USB 쓰기 제한이며, 해제 요청은 관리자 승인 후 Agent가 자동 롤백합니다.
+    </div>
+
+    {err&&<Notice type="error">SOAR API 오류 · {err}</Notice>}
+    {msg&&<Notice>{msg}</Notice>}
+
+    <div className="st-metric-grid cols4">
+      <StMetric label="승인 대기" value={awaiting.length} help="사용자 해제 요청"/>
+      <StMetric label="실행 중" value={queued.length} help="QUEUED / CLAIMED"/>
+      <StMetric label="실행 완료" value={completed.length} help="실제 Agent 결과"/>
+      <StMetric label="실패" value={failed.length} help="FAILED"/>
+    </div>
+
+    <SectionHeader>관리자 해제 승인</SectionHeader>
+    <Field label="관리자 메모">
+      <input
+        value={note}
+        onChange={e=>setNote(e.target.value)}
+        placeholder="승인/거절 사유"
+      />
+    </Field>
+
+    {awaiting.length===0
+      ? <Notice>현재 관리자 승인을 기다리는 해제 요청이 없습니다.</Notice>
+      : <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>사용자</th><th>대상 Host</th><th>제어</th>
+                <th>요청 사유</th><th>Risk</th><th>예측 벡터</th><th>결정</th>
+              </tr>
+            </thead>
+            <tbody>
+              {awaiting.map(r=><tr key={r.id}>
+                <td>#{r.id}</td>
+                <td>{r.user||'-'}</td>
+                <td>{r.target_host||'-'}</td>
+                <td>{operationKo(r.operation)} · {r.action_type||'-'}</td>
+                <td>{r.user_justification||r.reason||'-'}</td>
+                <td>{r.risk_score??'-'}</td>
+                <td>{r.predicted_vector||'-'}</td>
+                <td>
+                  <div className="alert-actions">
+                    <button
+                      className="btn primary small"
+                      disabled={Boolean(busy)}
+                      onClick={()=>decide(r.id,'APPROVE')}
+                    >승인</button>
+                    <button
+                      className="btn small"
+                      disabled={Boolean(busy)}
+                      onClick={()=>decide(r.id,'REJECT')}
+                    >거절</button>
+                  </div>
+                </td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+    }
+
+    <SectionHeader>실제 제어 이력</SectionHeader>
+    <div className="section-caption">
+      APPLY / RELEASE 명령의 큐 등록, Agent 수신, 실행 결과와 예측 컨텍스트를 함께 표시합니다.
+    </div>
+    <SimpleTable
+      tall
+      headers={['ID','시각','사용자','Host','동작','제어 유형','상태','Risk','진행도','예측 벡터','신뢰도','Agent 결과']}
+      rows={ordered.map(r=>[
+        `#${r.id}`,
+        fmt(r.updated_at||r.completed_at||r.created_at),
+        r.user||'-',
+        r.target_host||'-',
+        operationKo(r.operation),
+        r.action_type||'-',
+        statusKo(r.status),
+        r.risk_score??'-',
+        r.threat_progress==null?'-':`${r.threat_progress}%`,
+        r.predicted_vector||'-',
+        r.prediction_confidence==null?'-':`${r.prediction_confidence}%`,
+        r.agent_message||'-'
+      ])}
+    />
+
+    <div className="alert-actions">
+      <button className="btn primary" onClick={load}>SOAR 상태 새로고침</button>
+    </div>
   </>
 }
 
