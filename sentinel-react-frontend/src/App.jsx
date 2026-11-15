@@ -842,18 +842,67 @@ function JsonNarrative({data}){
 function UserAnalysisPage({events,users,refresh}){
   const[form,setForm]=useState({username:'',display_name:'',department:'',role:''}),[msg,setMsg]=useState(''),[selected,setSelected]=useState(''),[profile,setProfile]=useState(null),[dyn,setDyn]=useState(null),[adaptive,setAdaptive]=useState(null),[busy,setBusy]=useState(false),[registerOpen,setRegisterOpen]=useState(false),[tableMode,setTableMode]=useState(false),[deleteConfirm,setDeleteConfirm]=useState({})
   useEffect(()=>{if(!selected&&users[0])setSelected(users[0].username||users[0].user)},[users])
-  useEffect(()=>{if(!selected)return;api.behaviorProfile(selected).then(setProfile).catch(()=>setProfile(null));api.dynamicRisk(selected).then(setDyn).catch(()=>setDyn(null))},[selected])
+  useEffect(()=>{
+    if(!selected)return
+    let active=true
+
+    setProfile(null)
+    setDyn(null)
+
+    Promise.allSettled([
+      api.behaviorProfile(selected),
+      api.dynamicRisk(selected),
+    ]).then(results=>{
+      if(!active)return
+
+      const [profileResult,dynResult]=results
+
+      setProfile(
+        profileResult.status==='fulfilled'
+          ? profileResult.value
+          : null
+      )
+
+      setDyn(
+        dynResult.status==='fulfilled'
+          ? dynResult.value
+          : null
+      )
+    })
+
+    return()=>{active=false}
+  },[selected])
   const create=async e=>{e.preventDefault();if(!form.username.trim())return;try{await api.createUser(form);setMsg(`${form.username.trim()} 사용자를 모니터링 대상으로 등록했습니다. 개인 행동 기준선 학습이 시작됩니다.`);setForm({username:'',display_name:'',department:'',role:''});setRegisterOpen(false);refresh()}catch(e){setMsg(`등록 실패: ${e.message}`)}}
   const toggle=async(u,en)=>{try{await api.setUserEnabled(u,en);refresh()}catch(e){setMsg(e.message)}}
   const remove=async u=>{if(!deleteConfirm[u])return;try{await api.deleteUser(u);setMsg('사용자를 삭제했습니다.');setDeleteConfirm(x=>({...x,[u]:false}));refresh()}catch(e){setMsg(e.message)}}
   const runAdaptive=async()=>{setBusy(true);try{setAdaptive(await api.adaptiveCompare())}catch(e){setMsg(e.message)}finally{setBusy(false)}}
-  const userEvents=events.filter(e=>String(e.user)===String(selected));const userMax=Math.max(0,...userEvents.map(e=>num(e.risk_score))),userAvg=userEvents.length?userEvents.reduce((s,e)=>s+num(e.risk_score),0)/userEvents.length:0
+  const userEvents=arr(
+    profile?._dashboard_recent_events,
+    ['events','items','value']
+  )
+
+  const selectedUserEventTotal=num(
+    profile?._dashboard_total_event_count,
+    userEvents.length
+  )
+
+  const userMax=Math.max(
+    0,
+    ...userEvents.map(e=>num(e.risk_score))
+  )
+
+  const userAvg=userEvents.length
+    ? userEvents.reduce(
+        (s,e)=>s+num(e.risk_score),
+        0
+      )/userEvents.length
+    : 0
   const enabledCount=users.filter(u=>Boolean(u.monitoring_enabled??u.enabled??u.is_enabled)).length;const learningCount=users.filter(u=>String(u.learning_status||'').toUpperCase()==='LEARNING').length
   return <><SectionHeader>모니터링 사용자 관리</SectionHeader><div className="kpis user-admin-kpis"><Kpi title="등록 사용자" value={users.length} hint="관리자가 등록한 모니터링 계정"/><Kpi title="활성 모니터링" value={enabledCount} hint="현재 이벤트 수집 허용 계정"/><Kpi title="기준선 학습 중" value={learningCount} hint="Adaptive Baseline LEARNING"/></div>
     <button className="streamlit-expander-button" onClick={()=>setRegisterOpen(v=>!v)}>› &nbsp; ＋ 모니터링 사용자 등록</button>{registerOpen&&<form className="register-expander" onSubmit={create}><div className="register-grid"><Field label="사용자명 *"><input placeholder="예: 김재경" value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></Field><Field label="부서"><input placeholder="예: IT" value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></Field><Field label="표시 이름"><input placeholder="예: 김재경" value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})}/></Field><Field label="역할"><input placeholder="예: Developer" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}/></Field></div><button className="btn primary register-submit">모니터링 사용자 등록</button></form>}{msg&&<Notice>{msg}</Notice>}
     <div className="section-caption">비활성화하면 새 /events 수집을 차단합니다. 삭제해도 기존 SecurityEvent 감사 이력은 보존됩니다.</div><div className="user-view-switch"><button className={`mini-btn ${!tableMode?'active-mini':''}`} onClick={()=>setTableMode(false)}>카드 보기</button><button className={`mini-btn ${tableMode?'active-mini':''}`} onClick={()=>setTableMode(true)}>표 보기</button></div>
     {!tableMode?<div className="monitored-user-list">{users.map((u,i)=>{const name=u.username||u.user||'-',display=u.display_name||name,enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled),ls=String(u.learning_status||'LEARNING').toUpperCase();return <div className="monitored-user-row" key={name}><div className="baseline-summary user-admin-card"><div className="baseline-top"><div><div className="baseline-user">{display}</div><div className="baseline-meta">계정 {name} · {u.department||'-'} · {u.role||'-'} · 정상 학습 {num(u.learning_event_count).toLocaleString()}개 · 가중치 {num(u.confidence_weight,.25).toFixed(2)}</div></div><span className="baseline-badge">{ls} · {enabled?'활성':'비활성'}</span></div></div><div className="user-control-stack"><button className="btn primary user-action-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성화':'활성화'}</button><label className="delete-confirm-inline"><input type="checkbox" checked={Boolean(deleteConfirm[name])} onChange={e=>setDeleteConfirm(x=>({...x,[name]:e.target.checked}))}/> 삭제 확인</label><button className="btn ghost user-delete-btn" disabled={!deleteConfirm[name]} onClick={()=>remove(name)}>삭제</button></div></div>})}</div>:<SimpleTable headers={['사용자','표시 이름','부서','역할','모니터링','학습 상태','관리']} rows={users.map(u=>{const name=u.username||u.user||'-',enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled);return [name,u.display_name||'-',u.department||'-',u.role||'-',enabled?'활성':'비활성',u.learning_status||'-',<span key={name}><button className="mini-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성':'활성'}</button><button className="mini-btn danger-mini" onClick={()=>setDeleteConfirm(x=>({...x,[name]:true}))}>삭제</button></span>]})}/>} 
-    <SectionHeader>Adaptive Personal UEBA</SectionHeader><Field label="분석할 모니터링 사용자를 선택하세요."><select value={selected} onChange={e=>setSelected(e.target.value)}>{users.map(u=><option key={u.username||u.user} value={u.username||u.user}>{u.display_name||u.username||u.user}</option>)}</select></Field>{selected&&<><div className="baseline-summary"><div className="baseline-top"><div><div className="baseline-user">{users.find(u=>String(u.username||u.user)===String(selected))?.display_name||selected}</div><div className="baseline-meta">계정 {selected} · {users.find(u=>String(u.username||u.user)===String(selected))?.department||'-'} · {users.find(u=>String(u.username||u.user)===String(selected))?.role||'-'} · 모니터링 활성</div></div><span className="baseline-badge">BASELINE {profile?.confidence_level||profile?.learning_status||'-'}</span></div></div><SectionHeader>개인 행동 기준선 학습 상태</SectionHeader><ProfileView profile={profile} eventCount={userEvents.length}/><SectionHeader>Dynamic User Risk</SectionHeader><DynamicRiskView data={dyn} events={userEvents}/><SectionHeader>개별 이벤트 위험 지표</SectionHeader><div className="kpis compact"><Kpi title="전체 이벤트" value={userEvents.length} hint="수집된 사용자 활동"/><Kpi title="평균 Risk" value={userAvg.toFixed(1)} hint="사용자 평균 위험점수"/><Kpi title="최고 Risk" value={userMax.toFixed(1)} hint="관찰된 최고 위험도"/><Kpi title="고위험 이벤트" value={userEvents.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length} hint="HIGH + CRITICAL"/></div><UserRiskAnalysis events={userEvents}/><SectionHeader>사용자 활동 이력</SectionHeader><EventTable events={userEvents.slice(0,100)} tall/></>}
+    <SectionHeader>Adaptive Personal UEBA</SectionHeader><Field label="분석할 모니터링 사용자를 선택하세요."><select value={selected} onChange={e=>setSelected(e.target.value)}>{users.map(u=><option key={u.username||u.user} value={u.username||u.user}>{u.display_name||u.username||u.user}</option>)}</select></Field>{selected&&<><div className="baseline-summary"><div className="baseline-top"><div><div className="baseline-user">{users.find(u=>String(u.username||u.user)===String(selected))?.display_name||selected}</div><div className="baseline-meta">계정 {selected} · {users.find(u=>String(u.username||u.user)===String(selected))?.department||'-'} · {users.find(u=>String(u.username||u.user)===String(selected))?.role||'-'} · 모니터링 활성</div></div><span className="baseline-badge">BASELINE {profile?.confidence_level||profile?.learning_status||'-'}</span></div></div><SectionHeader>개인 행동 기준선 학습 상태</SectionHeader><ProfileView profile={profile} eventCount={selectedUserEventTotal}/><SectionHeader>Dynamic User Risk</SectionHeader><DynamicRiskView data={dyn} events={userEvents}/><SectionHeader>개별 이벤트 위험 지표</SectionHeader><div className="kpis compact"><Kpi title="전체 이벤트" value={selectedUserEventTotal.toLocaleString()} hint="선택 사용자의 전체 DB 이벤트"/><Kpi title="평균 Risk" value={userAvg.toFixed(1)} hint="사용자 평균 위험점수"/><Kpi title="최고 Risk" value={userMax.toFixed(1)} hint="관찰된 최고 위험도"/><Kpi title="고위험 이벤트" value={userEvents.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length} hint="HIGH + CRITICAL"/></div><UserRiskAnalysis events={userEvents}/><SectionHeader>사용자 활동 이력</SectionHeader><EventTable events={userEvents.slice(0,100)} tall/></>}
     <SectionHeader>Adaptive Personal UEBA 비교 시연</SectionHeader><div className="adaptive-demo-shell teaser"><div className="adaptive-demo-head">동일 행동 · 서로 다른 개인 기준선</div><div className="adaptive-demo-sub">23:00 PowerShell 실행이라는 동일 행동을 일반 주간 사무직 사용자와 재택/유연근무 IT 사용자의 개인 기준선과 Adaptive 보정 결과로 비교합니다.</div></div><div className="adaptive-run-row"><button className="btn primary" disabled={busy} onClick={runAdaptive}>{busy?'비교 실행 중...':'Adaptive 비교 실행'}</button><div className="section-caption">고정 Rule은 두 사용자 모두 23시를 비정상 시간대로 판단하지만, 충분히 학습된 개인 정상 패턴과 일치하는 경우에만 시간 규칙의 기여도를 제한적으로 보정합니다.</div></div>{adaptive&&<AdaptiveCompare data={adaptive}/>}</>
 }
 function ProfileView({profile,eventCount=0}){

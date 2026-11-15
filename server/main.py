@@ -1,6 +1,6 @@
 from server.auth import install_auth
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Optional
 import os
@@ -1934,12 +1934,27 @@ def get_behavior_profile(
         user=user
     )
 
+    event_query = (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user == user)
+    )
+
+    total_event_count = int(
+        event_query.count()
+    )
+
+    recent_events = (
+        event_query
+        .order_by(SecurityEvent.id.desc())
+        .limit(1000)
+        .all()
+    )
+
+    profile["_dashboard_total_event_count"] = total_event_count
+    profile["_dashboard_recent_events"] = recent_events
+
     return profile
 
-
-# -------------------------------------------------
-# Peer Group UEBA 프로필
-# -------------------------------------------------
 
 @app.get("/users/{user}/peer-profile")
 def get_peer_profile(
@@ -2311,26 +2326,66 @@ def create_monitored_user(user: MonitoredUserCreate, db: Session = Depends(get_d
 
 
 @app.get("/users")
-def get_monitored_users(db: Session = Depends(get_db)):
-    users = db.query(MonitoredUser).order_by(MonitoredUser.id.asc()).all()
+def get_monitored_users(
+    db: Session = Depends(get_db)
+):
+    users = (
+        db.query(MonitoredUser)
+        .order_by(MonitoredUser.id.asc())
+        .all()
+    )
+
+    now = datetime.now()
+    since = now - timedelta(days=30)
     results = []
 
     for monitored_user in users:
-        profile = get_user_behavior_profile(
-            db=db,
-            user=monitored_user.username
+        learning_count = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == monitored_user.username,
+                SecurityEvent.timestamp >= since,
+                SecurityEvent.timestamp < now,
+                SecurityEvent.risk_level == "LOW",
+            )
+            .count()
         )
+
+        if learning_count < 20:
+            learning_status = "LEARNING"
+            confidence_weight = 0.25
+        elif learning_count < 50:
+            learning_status = "LOW"
+            confidence_weight = 0.50
+        elif learning_count < 100:
+            learning_status = "MEDIUM"
+            confidence_weight = 0.75
+        else:
+            learning_status = "HIGH"
+            confidence_weight = 1.00
+
+        total_event_count = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == monitored_user.username
+            )
+            .count()
+        )
+
         results.append({
             "id": monitored_user.id,
             "username": monitored_user.username,
             "display_name": monitored_user.display_name,
             "department": monitored_user.department,
             "role": monitored_user.role,
-            "monitoring_enabled": bool(monitored_user.monitoring_enabled),
+            "monitoring_enabled": bool(
+                monitored_user.monitoring_enabled
+            ),
             "created_at": monitored_user.created_at,
-            "learning_status": profile["confidence_level"],
-            "learning_event_count": profile["event_count"],
-            "confidence_weight": profile["confidence_weight"]
+            "learning_status": learning_status,
+            "learning_event_count": int(learning_count),
+            "confidence_weight": confidence_weight,
+            "total_event_count": int(total_event_count),
         })
 
     return results

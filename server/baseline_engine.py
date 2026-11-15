@@ -72,8 +72,19 @@ def _get_learning_events(
     #
     # office_demo / flex_demo처럼 MonitoredUser에 등록되지 않은
     # Adaptive UEBA 시연 사용자는 기존 30일 기준을 그대로 사용한다.
+    exhibition_history_exists = (
+        db.query(SecurityEvent.id)
+        .filter(
+            SecurityEvent.user == user,
+            SecurityEvent.source.like("exhibition_seed%")
+        )
+        .first()
+        is not None
+    )
+
     if (
-        monitored_user is not None
+        not exhibition_history_exists
+        and monitored_user is not None
         and monitored_user.created_at is not None
         and monitored_user.created_at > learning_since
     ):
