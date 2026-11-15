@@ -1032,12 +1032,21 @@ def choose_work_timestamp(
                 )
 
                 if profile.evening_end >= evening_start:
+                    # datetime.hour는 0~23만 허용한다.
+                    # 프로필에서 evening_end=24는 "자정 직전까지"라는 의미로
+                    # 사용하므로 실제 생성 시각은 23시까지로 제한한다.
+                    safe_evening_end = min(
+                        profile.evening_end,
+                        23,
+                    )
+
                     hour = random.randint(
                         evening_start,
-                        profile.evening_end,
+                        safe_evening_end,
                     )
                 else:
-                    # 예: 22시~02시
+                    # 예: 22시~02시처럼 자정을 넘기는 직군.
+                    # 22~23시 또는 00~02시 중 하나를 정상 패턴으로 생성한다.
                     hour = random.choice(
                         list(range(evening_start, 24))
                         + list(range(0, profile.evening_end + 1))
