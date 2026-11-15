@@ -161,8 +161,17 @@ def install_auth(app):
         if path.startswith("/auth/"):
             return await call_next(request)
 
-        # Agent 이벤트 수집은 기존 Agent Token 체계를 그대로 사용
-        if path == "/events" and method == "POST":
+        # Windows Agent 요청은 각 API에서 X-Agent-Token으로 검증
+        agent_paths = (
+            path == "/events"
+            or path == "/response-controls/claim"
+            or (
+                path.startswith("/response-controls/")
+                and path.endswith("/result")
+            )
+        )
+
+        if method == "POST" and agent_paths:
             return await call_next(request)
 
         token = request.cookies.get(COOKIE_NAME)
