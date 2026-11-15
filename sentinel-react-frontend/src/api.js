@@ -26,6 +26,7 @@ async function request(path, options = {}) {
 
 export const api = {
   events: () => request('/events'),
+  eventSummary: () => request('/events/summary'),
   users: () => request('/users'),
 
   createUser: payload =>

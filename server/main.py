@@ -2160,6 +2160,57 @@ async def analyze_file_access(
             os.remove(temp_path)
 
 
+
+@app.get("/events/summary")
+def get_event_summary(
+    db: Session = Depends(get_db)
+):
+    active_users = [
+        str(row[0])
+        for row in (
+            db.query(MonitoredUser.username)
+            .filter(MonitoredUser.monitoring_enabled == 1)
+            .all()
+        )
+        if row[0]
+    ]
+
+    if not active_users:
+        return {
+            "total_events": 0,
+            "anomalies": 0,
+            "high_risk": 0,
+            "critical": 0,
+            "active_users": 0,
+        }
+
+    query = db.query(SecurityEvent).filter(
+        SecurityEvent.user.in_(active_users)
+    )
+
+    total_events = query.count()
+
+    anomalies = query.filter(
+        SecurityEvent.anomaly_score >= 50
+    ).count()
+
+    high_risk = query.filter(
+        SecurityEvent.risk_level.in_(["HIGH", "CRITICAL"])
+    ).count()
+
+    critical = query.filter(
+        SecurityEvent.risk_level == "CRITICAL"
+    ).count()
+
+    return {
+        "total_events": int(total_events),
+        "anomalies": int(anomalies),
+        "high_risk": int(high_risk),
+        "critical": int(critical),
+        "active_users": int(len(active_users)),
+    }
+
+
 @app.get("/events")
 def get_events(
     limit: int = 500,

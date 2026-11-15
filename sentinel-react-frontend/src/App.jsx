@@ -34,6 +34,7 @@ export default function App(){
   const [page,setPage]=useState('overview'),[autoRefresh,setAutoRefresh]=useState(true),[refreshKey,setRefreshKey]=useState(0)
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false)
   const [eventsRaw,eventsErr,,eventsLatency]=usePolling(api.events,autoRefresh?3000:86400000,refreshKey)
+  const [eventSummaryRaw]=usePolling(api.eventSummary,autoRefresh?3000:86400000,refreshKey)
   const [incRaw]=usePolling(api.incidents,autoRefresh?3000:86400000,refreshKey)
   const [usersRaw]=usePolling(api.users,autoRefresh?10000:86400000,refreshKey)
   const rawEvents=arr(eventsRaw,['events','items','value']).slice().sort((a,b)=>num(b.id)-num(a.id))
@@ -63,8 +64,8 @@ export default function App(){
       collapsed={sidebarCollapsed}
     />
     <main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
-    {page==='overview'&&<OverviewV2 events={events} users={users} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
-    {page==='events'&&<EventsPage events={events}/>} 
+    {page==='overview'&&<OverviewV2 events={events} users={users} summary={eventSummaryRaw} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
+    {page==='events'&&<EventsPage events={events} monitoredUsers={users} summary={eventSummaryRaw}/>} 
     {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
     {page==='users'&&<UserAnalysisPage events={events} users={users} refresh={refresh}/>} 
     {page==='behavior'&&<BehaviorPage/>} 
@@ -226,7 +227,7 @@ function SectionHeader({children}){return <div className="section-header"><div c
 function Notice({type='info',children}){return <div className={`notice ${type}`}>{children}</div>}
 function Field({label,children}){return <label className="field"><span>{label}</span>{children}</label>}
 
-function Overview({events,users,latestIncident,setPage,error,latency}){
+function Overview({events,users,summary,latestIncident,setPage,error,latency}){
   const levels=['LOW','MEDIUM','HIGH','CRITICAL'];const counts=levels.map(l=>[l,events.filter(e=>String(e.risk_level).toUpperCase()===l).length]);const anomaly=events.filter(e=>num(e.anomaly_score)>=50).length;const highCritical=events.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length;const critical=counts[3][1];const enabledUsers=users.filter(u=>u.monitoring_enabled===true||u.enabled===true||u.is_enabled===true).length||new Set(events.map(e=>e.user).filter(Boolean)).size;const avg=events.length?events.reduce((s,e)=>s+num(e.risk_score),0)/events.length:0;const latest=events[0]
   const topEvents=events.slice().sort((a,b)=>num(b.risk_score)-num(a.risk_score)).slice(0,5),um={};events.forEach(e=>{const u=e.user||'-',x=um[u]||=( {user:u,count:0,sum:0,max:0} );x.count++;x.sum+=num(e.risk_score);x.max=Math.max(x.max,num(e.risk_score))});const topUsers=Object.values(um).map(x=>({...x,avg:x.sum/x.count})).sort((a,b)=>b.max-a.max||b.avg-a.avg).slice(0,5)
   const tm={};events.forEach(e=>{const k=koEvent(e.event_type);tm[k]=(tm[k]||0)+1});let types=Object.entries(tm).sort((a,b)=>b[1]-a[1]);if(types.length>6){const o=types.slice(6).reduce((s,x)=>s+x[1],0);types=types.slice(0,6);if(o)types.push(['기타',o])}
@@ -486,10 +487,41 @@ function AlertTable({events}){return <SimpleTable headers={['탐지 시간','위
 function EventTable({events,tall=false}){return <SimpleTable tall={tall} headers={['이벤트 ID','발생 시간','사용자','이벤트 유형','Source IP','로그인 실패','파일','파일 등급','파일 접근','USB','프로세스','Anomaly Score','Risk Score','위험 등급']} rows={events.map(e=>[e.id,fmt(e.timestamp||e.created_at),e.user||'-',koEvent(e.event_type),e.source_ip||'-',e.login_fail_count??'-',e.file_name||e.file_path||'-',e.file_grade||'-',e.file_access_count??'-',e.usb_connected??'-',e.process_name||'-',num(e.anomaly_score).toFixed(2),num(e.risk_score).toFixed(2),e.risk_level||'-'])}/>} 
 function SimpleTable({headers,rows,short=false,tall=false}){return <div className={`table-wrap ${short?'short':''} ${tall?'tall':''}`}><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i}>{r.map((c,j)=><td key={j}>{c}</td>)}</tr>):<tr><td colSpan={headers.length} className="empty-cell">표시할 데이터가 없습니다.</td></tr>}</tbody></table></div>}
 
-function EventsPage({events}){
+function EventsPage({events,monitoredUsers=[],summary}){
   const[level,setLevel]=useState('전체'),[user,setUser]=useState('전체'),[type,setType]=useState('전체'),[search,setSearch]=useState(''),[selectedBehavior,setSelectedBehavior]=useState(''),[selectedExplain,setSelectedExplain]=useState(''),[explanation,setExplanation]=useState(null),[exErr,setExErr]=useState(''),[eventAI,setEventAI]=useState(null),[eventAiError,setEventAiError]=useState(''),[aiBusy,setAiBusy]=useState(false)
-  const levels=['전체',...new Set(events.map(e=>e.risk_level).filter(Boolean))],users=['전체',...new Set(events.map(e=>e.user).filter(Boolean))],types=['전체',...new Set(events.map(e=>koEvent(e.event_type)).filter(Boolean))]
+  const levels=['전체',...new Set(events.map(e=>e.risk_level).filter(Boolean))]
+  const monitoredUserNames=monitoredUsers
+    .filter(u=>u.monitoring_enabled===true||u.enabled===true||u.is_enabled===true)
+    .map(u=>String(u.username||u.user||''))
+    .filter(Boolean)
+  const users=['전체',...new Set(monitoredUserNames.length?monitoredUserNames:events.map(e=>e.user).filter(Boolean))]
+  const types=['전체',...new Set(events.map(e=>koEvent(e.event_type)).filter(Boolean))]
   const filtered=events.filter(e=>(level==='전체'||e.risk_level===level)&&(user==='전체'||String(e.user)===user)&&(type==='전체'||koEvent(e.event_type)===type)&&(!search.trim()||[e.user,e.source_ip,e.file_name,e.file_path,e.process_name].some(v=>String(v||'').toLowerCase().includes(search.trim().toLowerCase()))))
+  const hasEventFilter=
+    level!=='전체'||
+    user!=='전체'||
+    type!=='전체'||
+    Boolean(search.trim())
+
+  const visibleEventCount=hasEventFilter
+    ? filtered.length
+    : num(summary?.total_events,filtered.length)
+
+  const visibleCritical=hasEventFilter
+    ? filtered.filter(e=>String(e.risk_level).toUpperCase()==='CRITICAL').length
+    : num(summary?.critical,filtered.filter(e=>String(e.risk_level).toUpperCase()==='CRITICAL').length)
+
+  const visibleHigh=hasEventFilter
+    ? filtered.filter(e=>String(e.risk_level).toUpperCase()==='HIGH').length
+    : Math.max(0,num(summary?.high_risk,0)-num(summary?.critical,0))
+
+  const visibleUsers=hasEventFilter
+    ? new Set(filtered.map(e=>e.user).filter(Boolean)).size
+    : num(
+        summary?.active_users,
+        monitoredUserNames.length||
+        new Set(filtered.map(e=>e.user).filter(Boolean)).size
+      )
   const behaviorEvents=filtered.filter(e=>String(e.reasons||'').includes('행동 변화 검증:')),explainables=filtered.filter(e=>e.id!=null)
   useEffect(()=>{if(!selectedBehavior&&behaviorEvents[0])setSelectedBehavior(String(behaviorEvents[0].id));if(!selectedExplain&&explainables[0])setSelectedExplain(String(explainables[0].id))},[filtered.length])
   const bEvent=behaviorEvents.find(e=>String(e.id)===String(selectedBehavior));const behaviorItems=[];String(bEvent?.reasons||'').split(',').forEach(reason=>{reason=reason.trim();if(!reason.startsWith('행동 변화 검증:'))return;const p=reason.replace('행동 변화 검증:','').trim().split(' / ');behaviorItems.push({target:p[0],status:String(p[1]||'OBSERVING').toUpperCase(),reason:p.slice(2).join(' / ')||'-'})})
@@ -508,7 +540,7 @@ function EventsPage({events}){
     }
   }
   return <><SectionHeader>이벤트 필터</SectionHeader><div className="filter-grid"><Field label="위험 등급"><select value={level} onChange={e=>setLevel(e.target.value)}>{levels.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="사용자"><select value={user} onChange={e=>setUser(e.target.value)}>{users.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="이벤트 유형"><select value={type} onChange={e=>setType(e.target.value)}>{types.map(x=><option key={x}>{x}</option>)}</select></Field></div><Field label="검색"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="사용자, IP, 파일명, 프로세스명 검색"/></Field>
-    <SectionHeader>모니터링 현황</SectionHeader><div className="kpis compact"><Kpi title="조회 이벤트" value={filtered.length} hint="현재 필터 조건"/><Kpi title="CRITICAL" value={filtered.filter(e=>e.risk_level==='CRITICAL').length} hint="긴급 위험 이벤트" danger/><Kpi title="HIGH" value={filtered.filter(e=>e.risk_level==='HIGH').length} hint="고위험 이벤트" warning/><Kpi title="사용자" value={new Set(filtered.map(e=>e.user).filter(Boolean)).size} hint="조회된 사용자"/></div>
+    <SectionHeader>모니터링 현황</SectionHeader><div className="kpis compact"><Kpi title="조회 이벤트" value={visibleEventCount.toLocaleString()} hint={hasEventFilter?'현재 로딩 구간의 필터 결과':'전체 모니터링 이벤트'}/><Kpi title="CRITICAL" value={visibleCritical.toLocaleString()} hint="긴급 위험 이벤트" danger/><Kpi title="HIGH" value={visibleHigh.toLocaleString()} hint="고위험 이벤트" warning/><Kpi title="사용자" value={visibleUsers.toLocaleString()} hint={hasEventFilter?'현재 필터 결과 사용자':'활성 모니터링 사용자'}/></div>
     <SectionHeader>보안 이벤트 로그</SectionHeader><EventTable events={filtered} tall/>
     <SectionHeader>행동 변화 검증</SectionHeader><div className="section-caption">새로운 IP·프로세스·장치를 즉시 정상으로 학습하지 않고 관찰 후 ACCEPTED 또는 REJECTED 상태로 판정합니다.</div>{behaviorEvents.length?<><Field label="행동 변화 검증 이벤트"><select value={selectedBehavior} onChange={e=>setSelectedBehavior(e.target.value)}>{behaviorEvents.map(e=><option value={e.id} key={e.id}>#{e.id} · {e.user} · {koEvent(e.event_type)} · {e.risk_level}</option>)}</select></Field><div className="st-metric-grid cols3"><StMetric label="관찰 중" value={behaviorItems.filter(x=>x.status==='OBSERVING').length}/><StMetric label="정상 승인" value={behaviorItems.filter(x=>x.status==='ACCEPTED').length}/><StMetric label="학습 제외" value={behaviorItems.filter(x=>x.status==='REJECTED').length}/></div><div className="behavior-cards">{behaviorItems.map((x,i)=><Notice key={i} type={x.status==='REJECTED'?'error':x.status==='ACCEPTED'?'success':'warning'}><b>{x.status} · {x.target}</b><br/>{x.reason}</Notice>)}</div></>:<Notice>현재 표시 중인 이벤트에는 행동 변화 검증 결과가 없습니다.</Notice>}
     <SectionHeader>Explainable Risk Score</SectionHeader><div className="section-caption">선택한 이벤트의 Rule / Baseline / ML / Sequence / Peer / Adaptive 점수와 위험도 보정 근거를 확인합니다.</div><div className="action-row"><select className="select grow" value={selectedExplain} onChange={e=>{setSelectedExplain(e.target.value);setExplanation(null);setEventAI(null)}}>{explainables.map(e=><option value={e.id} key={e.id}>#{e.id} · {e.user} · {koEvent(e.event_type)} · Risk {num(e.risk_score).toFixed(2)}</option>)}</select><button className="btn primary" onClick={loadExplain}>위험도 근거 조회</button><button type="button" className="btn primary" disabled={aiBusy} onClick={runAI}>{aiBusy?'AI 분석 중...':'개별 이벤트 AI 분석'}</button></div>{exErr&&<Notice type="error">{exErr}</Notice>}{explanation&&<RiskExplanation data={explanation}/>} {eventAiError&&<Notice type="error">AI 보안 분석 실패 · {eventAiError}</Notice>}{eventAI&&<EventAIReport response={eventAI}/>}
@@ -923,7 +955,7 @@ function ThresholdChart({rows}){const vals=rows.map(r=>({x:num(r[0]),f:num(r[2])
 function Footer(){return <div className="footer"><span>SENTINEL · 내부자 위협 탐지 및 대응 플랫폼</span><span>RULE · ML · UEBA · SEQUENCE · PII · LLM</span></div>}
 
 
-function OverviewV2({events,users,latestIncident,setPage,error,latency}){
+function OverviewV2({events,users,summary,latestIncident,setPage,error,latency}){
   const levels=['LOW','MEDIUM','HIGH','CRITICAL']
 
   const counts=levels.map(level=>[
@@ -1142,27 +1174,27 @@ function OverviewV2({events,users,latestIncident,setPage,error,latency}){
         <section className="ov2-metrics">
           <div className="ov2-stat">
             <span>Events</span>
-            <strong>{events.length.toLocaleString()}</strong>
+            <strong>{num(summary?.total_events,events.length).toLocaleString()}</strong>
             <small>수집된 보안 이벤트</small>
           </div>
 
           <div className="ov2-stat">
             <span>Anomalies</span>
-            <strong>{anomaly.toLocaleString()}</strong>
+            <strong>{num(summary?.anomalies,anomaly).toLocaleString()}</strong>
             <small>이상행동 탐지</small>
           </div>
 
           <div className="ov2-stat">
             <span>High Risk</span>
             <strong className="orange">
-              {highCritical.toLocaleString()}
+              {num(summary?.high_risk,highCritical).toLocaleString()}
             </strong>
             <small>HIGH + CRITICAL</small>
           </div>
 
           <div className="ov2-stat">
             <span>Users</span>
-            <strong>{enabledUsers.toLocaleString()}</strong>
+            <strong>{num(summary?.active_users,enabledUsers).toLocaleString()}</strong>
             <small>모니터링 사용자</small>
           </div>
         </section>
