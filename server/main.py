@@ -20,7 +20,7 @@ from fastapi import (
     Header,
     Request
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -74,6 +74,15 @@ from server.risk_explanation_engine import (
     build_risk_explanation,
     save_risk_explanation,
     get_risk_explanation
+)
+from server.response_control_engine import (
+    ResponseControlAction,
+    create_control_action,
+    list_control_actions,
+    claim_next_action,
+    complete_action,
+    request_release,
+    decide_release_request,
 )
 from server.schema_migration import migrate_security_event_schema
 from server.change_verification_engine import (
@@ -246,6 +255,46 @@ class PlaybookStepUpdate(BaseModel):
 class BehaviorChangeDecision(BaseModel):
     action: str
     note: Optional[str] = None
+
+
+
+class ResponseControlCreate(BaseModel):
+    user: str
+    action_type: str = "USB_WRITE_RESTRICT"
+    operation: str = "APPLY"
+    reason: Optional[str] = None
+    target_host: Optional[str] = None
+    risk_score: Optional[int] = None
+    threat_progress: Optional[int] = None
+    predicted_vector: Optional[str] = None
+    prediction_confidence: Optional[int] = None
+    requested_by: Optional[str] = "SYSTEM"
+    user_justification: Optional[str] = None
+    admin_note: Optional[str] = None
+
+
+class ResponseControlClaim(BaseModel):
+    hostname: str
+    username: Optional[str] = None
+
+
+class ResponseControlResult(BaseModel):
+    success: bool
+    agent_message: Optional[str] = None
+    hostname: Optional[str] = None
+    username: Optional[str] = None
+    active_window: Optional[str] = None
+    running_processes: list = Field(default_factory=list)
+    screenshot_base64: Optional[str] = None
+
+
+class ReleaseRequestCreate(BaseModel):
+    justification: str
+
+
+class ReleaseDecision(BaseModel):
+    decision: str
+    admin_note: Optional[str] = None
 
 
 def get_risk_level(score):
@@ -3865,5 +3914,129 @@ def analyze_event_with_ai(
         "risk_score": event.risk_score,
         "risk_level": event.risk_level,
         "ai_analysis": ai_result
+    }
+
+
+# ============================================================
+# Predictive / Real SOAR Response Control
+# ============================================================
+
+@app.get("/response-controls")
+def get_response_controls(
+    user: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    return list_control_actions(db, user=user, status=status, limit=limit)
+
+
+@app.post("/response-controls")
+def queue_response_control(
+    body: ResponseControlCreate,
+    db: Session = Depends(get_db),
+):
+    result, error = create_control_action(
+        db,
+        user=body.user,
+        action_type=body.action_type,
+        operation=body.operation,
+        reason=body.reason,
+        target_host=body.target_host,
+        risk_score=body.risk_score,
+        threat_progress=body.threat_progress,
+        predicted_vector=body.predicted_vector,
+        prediction_confidence=body.prediction_confidence,
+        requested_by=body.requested_by,
+        user_justification=body.user_justification,
+        admin_note=body.admin_note,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "SOAR 제어 작업이 큐에 등록되었습니다.", "action": result}
+
+
+@app.post("/response-controls/claim")
+def claim_response_control(
+    body: ResponseControlClaim,
+    db: Session = Depends(get_db),
+):
+    action = claim_next_action(db, hostname=body.hostname)
+    return {"action": action}
+
+
+@app.post("/response-controls/{action_id}/result")
+def report_response_control_result(
+    action_id: int,
+    body: ResponseControlResult,
+    db: Session = Depends(get_db),
+):
+    import base64
+    from pathlib import Path
+
+    screenshot_path = None
+
+    if body.screenshot_base64:
+        try:
+            raw = base64.b64decode(body.screenshot_base64, validate=True)
+            root = Path(__file__).resolve().parent.parent
+            evidence_dir = root / "evidence" / "screenshots"
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            target = evidence_dir / f"control_{action_id}.jpg"
+            target.write_bytes(raw)
+            screenshot_path = str(target.relative_to(root)).replace("\\", "/")
+        except Exception as exc:
+            screenshot_path = f"SCREENSHOT_SAVE_FAILED: {exc}"
+
+    result, error = complete_action(
+        db,
+        action_id=action_id,
+        success=body.success,
+        agent_message=body.agent_message,
+        active_window=body.active_window,
+        running_processes=body.running_processes,
+        screenshot_path=screenshot_path,
+    )
+    if error:
+        raise HTTPException(status_code=404, detail=error)
+
+    return {"message": "Response Agent 결과가 기록되었습니다.", "action": result}
+
+
+@app.post("/response-controls/{action_id}/release-request")
+def create_response_control_release_request(
+    action_id: int,
+    body: ReleaseRequestCreate,
+    db: Session = Depends(get_db),
+):
+    result, error = request_release(
+        db,
+        action_id=action_id,
+        justification=body.justification,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {"message": "관리자에게 제어 해제를 요청했습니다.", "request": result}
+
+
+@app.post("/response-controls/{request_id}/release-decision")
+def decide_response_control_release(
+    request_id: int,
+    body: ReleaseDecision,
+    db: Session = Depends(get_db),
+):
+    result, error = decide_release_request(
+        db,
+        request_id=request_id,
+        decision=body.decision,
+        admin_note=body.admin_note,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {
+        "message": "해제 요청에 대한 관리자 결정이 반영되었습니다.",
+        "request": result,
     }
 
