@@ -6117,3 +6117,116 @@ textarea:focus{
     left:54px !important;
   }
 }
+
+/* ===== DEFINITIVE COLLAPSED SIDEBAR WIDTH FIX ===== */
+
+.sidebar.collapsed{
+  width:76px !important;
+  min-width:76px !important;
+  max-width:76px !important;
+}
+
+.sidebar.collapsed + .main{
+  margin-left:76px !important;
+  width:calc(100vw - 76px) !important;
+  min-width:calc(100vw - 76px) !important;
+  max-width:calc(100vw - 76px) !important;
+  box-sizing:border-box !important;
+  display:block !important;
+}
+
+.sidebar.collapsed + .main > .content{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:1600px !important;
+  box-sizing:border-box !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+
+.sidebar.collapsed + .main .soc-header,
+.sidebar.collapsed + .main .overview-v2,
+.sidebar.collapsed + .main .ov2-hero,
+.sidebar.collapsed + .main .ov2-metrics,
+.sidebar.collapsed + .main .ov2-block,
+.sidebar.collapsed + .main .ov2-live-list,
+.sidebar.collapsed + .main .ov2-analytics,
+.sidebar.collapsed + .main .ov2-table-grid{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:none !important;
+  box-sizing:border-box !important;
+}
+
+.sidebar.collapsed + .main .ov2-hero{
+  display:grid !important;
+  grid-template-columns:minmax(0,1.65fr) minmax(280px,.75fr) !important;
+  gap:22px !important;
+}
+
+.sidebar.collapsed + .main .ov2-metrics{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+}
+
+.sidebar.collapsed + .main .ov2-analytics{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(300px,.78fr) !important;
+  gap:16px !important;
+}
+
+.sidebar.collapsed + .main .ov2-table-grid{
+  display:grid !important;
+  grid-template-columns:1.25fr 1fr !important;
+  gap:16px !important;
+}
+
+.sidebar.collapsed + .main .soc-title,
+.sidebar.collapsed + .main .soc-subtitle,
+.sidebar.collapsed + .main .ov2-hero-copy,
+.sidebar.collapsed + .main .ov2-hero h2,
+.sidebar.collapsed + .main .ov2-hero p,
+.sidebar.collapsed + .main .ov2-card-head,
+.sidebar.collapsed + .main .ov2-section-head{
+  width:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  word-break:keep-all !important;
+  overflow-wrap:normal !important;
+  white-space:normal !important;
+}
+
+.app-shell.sidebar-collapsed .main{
+  margin-left:76px !important;
+  width:calc(100vw - 76px) !important;
+  min-width:calc(100vw - 76px) !important;
+  max-width:calc(100vw - 76px) !important;
+}
+
+@media(max-width:1200px){
+  .sidebar.collapsed{
+    width:72px !important;
+    min-width:72px !important;
+    max-width:72px !important;
+  }
+
+  .sidebar.collapsed + .main,
+  .app-shell.sidebar-collapsed .main{
+    margin-left:72px !important;
+    width:calc(100vw - 72px) !important;
+    min-width:calc(100vw - 72px) !important;
+    max-width:calc(100vw - 72px) !important;
+  }
+
+  .sidebar.collapsed + .main .ov2-hero{
+    grid-template-columns:1fr !important;
+  }
+
+  .sidebar.collapsed + .main .ov2-analytics{
+    grid-template-columns:1fr 1fr !important;
+  }
+
+  .sidebar.collapsed + .main .ov2-risk-card{
+    grid-column:1 / -1 !important;
+  }
+}
