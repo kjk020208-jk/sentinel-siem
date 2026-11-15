@@ -350,7 +350,7 @@ function InteractiveDonut({items,centerTop,centerBottom}){
         data={[{
           type:'pie',
 
-          hole:.73,
+          hole:.80,
 
           labels,
           values,
