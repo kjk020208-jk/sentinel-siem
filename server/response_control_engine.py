@@ -14,6 +14,7 @@ class ResponseControlAction(Base):
     id = Column(Integer, primary_key=True, index=True)
     user = Column(String, index=True, nullable=False)
     target_host = Column(String, index=True, nullable=True)
+    target_agent_id = Column(String, index=True, nullable=True)
     action_type = Column(String, index=True, nullable=False)
     operation = Column(String, nullable=False)
     status = Column(String, index=True, default="QUEUED", nullable=False)
@@ -50,6 +51,7 @@ def _serialize(row):
         "id": row.id,
         "user": row.user,
         "target_host": row.target_host,
+        "target_agent_id": row.target_agent_id,
         "action_type": row.action_type,
         "operation": row.operation,
         "status": row.status,
@@ -80,6 +82,7 @@ def create_control_action(
     operation: str,
     reason: Optional[str] = None,
     target_host: Optional[str] = None,
+    target_agent_id: Optional[str] = None,
     risk_score: Optional[int] = None,
     threat_progress: Optional[int] = None,
     predicted_vector: Optional[str] = None,
@@ -99,6 +102,7 @@ def create_control_action(
     row = ResponseControlAction(
         user=user,
         target_host=target_host or None,
+        target_agent_id=target_agent_id or None,
         action_type=action_type,
         operation=operation,
         status="QUEUED",
@@ -128,7 +132,12 @@ def list_control_actions(db: Session, *, user=None, status=None, limit=100):
     return [_serialize(x) for x in rows]
 
 
-def claim_next_action(db: Session, *, hostname: str):
+def claim_next_action(
+    db: Session,
+    *,
+    hostname: str,
+    agent_id: Optional[str] = None,
+):
     rows = (
         db.query(ResponseControlAction)
         .filter(ResponseControlAction.status == "QUEUED")
@@ -136,20 +145,41 @@ def claim_next_action(db: Session, *, hostname: str):
         .limit(50)
         .all()
     )
+
     hostname_l = (hostname or "").lower()
+    agent_id_l = (agent_id or "").lower()
+
     selected = None
+
     for row in rows:
-        if not row.target_host or str(row.target_host).lower() == hostname_l:
+        target_agent_id = str(
+            getattr(row, "target_agent_id", None) or ""
+        ).lower()
+
+        target_host = str(
+            row.target_host or ""
+        ).lower()
+
+        if target_agent_id:
+            if agent_id_l and target_agent_id == agent_id_l:
+                selected = row
+                break
+            continue
+
+        if not target_host or target_host == hostname_l:
             selected = row
             break
+
     if selected is None:
         return None
+
     selected.status = "CLAIMED"
     selected.claimed_at = datetime.now()
+
     db.commit()
     db.refresh(selected)
-    return _serialize(selected)
 
+    return _serialize(selected)
 
 def complete_action(
     db: Session,
@@ -238,3 +268,30 @@ def decide_release_request(db: Session, *, request_id: int, decision: str, admin
     db.commit()
     db.refresh(row)
     return _serialize(row), None
+
+def migrate_response_control_agent_target(engine):
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+
+    if "response_control_actions" not in inspector.get_table_names():
+        return
+
+    columns = {
+        col["name"]
+        for col in inspector.get_columns("response_control_actions")
+    }
+
+    if "target_agent_id" in columns:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE response_control_actions "
+                "ADD COLUMN target_agent_id VARCHAR"
+            )
+        )
+
+    print("[DB MIGRATION] response_control_actions.target_agent_id added")
+

@@ -26,7 +26,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from server.database import Base, engine, get_db
-from server.endpoint_registry import router as endpoint_registry_router
+from server.endpoint_registry import (
+    router as endpoint_registry_router,
+    EndpointRegistry,
+)
 from server.models import (
     SecurityEvent,
     MonitoredUser
@@ -85,6 +88,7 @@ from server.response_control_engine import (
     complete_action,
     request_release,
     decide_release_request,
+    migrate_response_control_agent_target,
 )
 from server.threat_prediction_engine import (
     ThreatPrediction,
@@ -109,6 +113,7 @@ from server.endpoint_context_engine import (
 
 
 Base.metadata.create_all(bind=engine)
+migrate_response_control_agent_target(engine)
 migrate_security_event_schema(engine)
 
 app = FastAPI(
@@ -286,6 +291,7 @@ class ResponseControlCreate(BaseModel):
     operation: str = "APPLY"
     reason: Optional[str] = None
     target_host: Optional[str] = None
+    target_agent_id: Optional[str] = None
     risk_score: Optional[int] = None
     threat_progress: Optional[int] = None
     predicted_vector: Optional[str] = None
@@ -297,6 +303,7 @@ class ResponseControlCreate(BaseModel):
 
 class ResponseControlClaim(BaseModel):
     hostname: str
+    agent_id: Optional[str] = None
     username: Optional[str] = None
 
 
@@ -4192,13 +4199,35 @@ def queue_response_control(
     body: ResponseControlCreate,
     db: Session = Depends(get_db),
 ):
+    resolved_agent_id = (body.target_agent_id or "").strip() or None
+    resolved_host = body.target_host
+
+    if not resolved_agent_id:
+        endpoint_query = db.query(EndpointRegistry).filter(
+            EndpointRegistry.linked_user == body.user
+        )
+
+        if resolved_host:
+            endpoint_query = endpoint_query.filter(
+                EndpointRegistry.hostname == resolved_host
+            )
+
+        endpoint = endpoint_query.order_by(
+            EndpointRegistry.last_seen_at.desc()
+        ).first()
+
+        if endpoint:
+            resolved_agent_id = endpoint.agent_id
+            resolved_host = endpoint.hostname
+
     result, error = create_control_action(
         db,
         user=body.user,
         action_type=body.action_type,
         operation=body.operation,
         reason=body.reason,
-        target_host=body.target_host,
+        target_host=resolved_host,
+        target_agent_id=resolved_agent_id,
         risk_score=body.risk_score,
         threat_progress=body.threat_progress,
         predicted_vector=body.predicted_vector,
@@ -4227,7 +4256,11 @@ def claim_response_control(
                 detail="유효하지 않은 SENTINEL Agent Token입니다.",
             )
 
-    action = claim_next_action(db, hostname=body.hostname)
+    action = claim_next_action(
+        db,
+        hostname=body.hostname,
+        agent_id=body.agent_id,
+    )
     return {"action": action}
 
 
