@@ -164,6 +164,7 @@ def install_auth(app):
         # Windows Agent 요청은 각 API에서 X-Agent-Token으로 검증
         agent_paths = (
             path == "/events"
+            or path == "/agent/enroll"
             or path == "/agent/register"
             or path == "/agent/heartbeat"
             or path == "/response-controls/claim"

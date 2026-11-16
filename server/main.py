@@ -190,6 +190,7 @@ async def sentinel_admin_auth(request: Request, call_next):
     # Windows Agents use X-Agent-Token authentication.
     agent_paths = (
         request.url.path == "/events"
+        or request.url.path == "/agent/enroll"
         or request.url.path == "/agent/register"
         or request.url.path == "/agent/heartbeat"
         or request.url.path == "/response-controls/claim"

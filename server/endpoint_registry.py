@@ -15,6 +15,7 @@ router = APIRouter()
 
 ONLINE_SECONDS = int(os.getenv("SENTINEL_ENDPOINT_ONLINE_SECONDS", "45"))
 AGENT_TOKEN = os.getenv("SENTINEL_AGENT_TOKEN", "").strip()
+ENROLLMENT_TOKEN = os.getenv("SENTINEL_ENROLLMENT_TOKEN", "").strip()
 
 
 class EndpointRegistry(Base):
@@ -31,6 +32,10 @@ class EndpointRegistry(Base):
     status = Column(String, nullable=False, default="PENDING")
     first_seen_at = Column(DateTime, nullable=False, default=datetime.now)
     last_seen_at = Column(DateTime, nullable=False, default=datetime.now)
+
+
+class AgentEnroll(BaseModel):
+    enrollment_code: str
 
 
 class AgentRegister(BaseModel):
@@ -138,6 +143,37 @@ def _upsert(db: Session, body):
     db.commit()
     db.refresh(row)
     return row
+
+
+@router.post("/agent/enroll")
+def enroll_agent(body: AgentEnroll):
+    if not ENROLLMENT_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Agent Enrollment가 서버에서 활성화되지 않았습니다.",
+        )
+
+    supplied = (body.enrollment_code or "").strip()
+
+    if not supplied or not secrets.compare_digest(
+        supplied,
+        ENROLLMENT_TOKEN,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="유효하지 않은 Enrollment Code입니다.",
+        )
+
+    if not AGENT_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="SENTINEL_AGENT_TOKEN이 설정되지 않았습니다.",
+        )
+
+    return {
+        "ok": True,
+        "agent_token": AGENT_TOKEN,
+    }
 
 
 @router.post("/agent/register")
