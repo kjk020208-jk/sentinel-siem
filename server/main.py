@@ -4048,13 +4048,8 @@ def report_response_control_result(
 
     if body.screenshot_base64:
         try:
-            raw = base64.b64decode(body.screenshot_base64, validate=True)
-            root = Path(__file__).resolve().parent.parent
-            evidence_dir = root / "evidence" / "screenshots"
-            evidence_dir.mkdir(parents=True, exist_ok=True)
-            target = evidence_dir / f"control_{action_id}.jpg"
-            target.write_bytes(raw)
-            screenshot_path = str(target.relative_to(root)).replace("\\", "/")
+            base64.b64decode(body.screenshot_base64, validate=True)
+            screenshot_path = "DB64:" + body.screenshot_base64
         except Exception as exc:
             screenshot_path = f"SCREENSHOT_SAVE_FAILED: {exc}"
 
@@ -4100,12 +4095,23 @@ def get_response_control_evidence(
     screenshot_error = None
 
     if row.screenshot_path:
-        if str(row.screenshot_path).startswith("SCREENSHOT_SAVE_FAILED:"):
-            screenshot_error = row.screenshot_path
+        stored = str(row.screenshot_path)
+
+        if stored.startswith("DB64:"):
+            encoded = stored[5:]
+            try:
+                base64.b64decode(encoded, validate=True)
+                screenshot_data_url = "data:image/jpeg;base64," + encoded
+            except Exception as exc:
+                screenshot_error = f"DB 화면 캡처 데이터가 손상되었습니다: {exc}"
+
+        elif stored.startswith("SCREENSHOT_SAVE_FAILED:"):
+            screenshot_error = stored
+
         else:
             try:
                 root = Path(__file__).resolve().parent.parent
-                target = (root / row.screenshot_path).resolve()
+                target = (root / stored).resolve()
 
                 if root.resolve() not in target.parents:
                     raise ValueError("허용되지 않은 Evidence 경로입니다.")
@@ -4183,13 +4189,8 @@ def create_response_control_user_release_request(
     screenshot_path = None
     if body.screenshot_base64:
         try:
-            raw = base64.b64decode(body.screenshot_base64, validate=True)
-            root = Path(__file__).resolve().parent.parent
-            evidence_dir = root / "evidence" / "screenshots"
-            evidence_dir.mkdir(parents=True, exist_ok=True)
-            target = evidence_dir / f"release_request_{action_id}.jpg"
-            target.write_bytes(raw)
-            screenshot_path = str(target.relative_to(root)).replace("\\", "/")
+            base64.b64decode(body.screenshot_base64, validate=True)
+            screenshot_path = "DB64:" + body.screenshot_base64
         except Exception as exc:
             screenshot_path = f"SCREENSHOT_SAVE_FAILED: {exc}"
 
