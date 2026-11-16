@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from server.database import Base, engine, get_db
+from server.endpoint_registry import router as endpoint_registry_router
 from server.models import (
     SecurityEvent,
     MonitoredUser
@@ -116,6 +117,8 @@ app = FastAPI(
     version="0.9"
 )
 
+app.include_router(endpoint_registry_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -182,6 +185,8 @@ async def sentinel_admin_auth(request: Request, call_next):
     # Windows Agents use X-Agent-Token authentication.
     agent_paths = (
         request.url.path == "/events"
+        or request.url.path == "/agent/register"
+        or request.url.path == "/agent/heartbeat"
         or request.url.path == "/response-controls/claim"
         or (
             request.url.path.startswith("/response-controls/")

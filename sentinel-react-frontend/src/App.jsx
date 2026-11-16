@@ -7,6 +7,7 @@ const PAGE_META = {
   events: ['보안 이벤트 모니터링', 'Windows 보안 이벤트 · 파일 접근 · USB · 프로세스 실행 모니터링'],
   incidents: ['보안 사고 분석', 'Incident Correlation · Attack Storyline · 연관 이벤트 · AI 보조 분석'],
   users: ['사용자 행동 분석', '사용자별 행동 패턴 · 위험도 · 활동 이력 분석'],
+  endpoints: ['Endpoint 관리', 'Agent 자동 등록 · 온라인 상태 · 사용자 연결 · 단말 식별'],
   behavior: ['행동 변화 승인 관리', 'Human-in-the-loop · 예외 승인 · 위험 유지 · 재관찰'],
   soar: ['SOAR 대응 제어', '실제 엔드포인트 제어 · 해제 요청 · 관리자 승인 · 자동 롤백'],
   cert: ['CERT 100K 성능 검증', 'CERT Insider Threat Dataset r4.2 · 100,000건 기반 탐지 성능 평가'],
@@ -14,7 +15,7 @@ const PAGE_META = {
 
 const MENU = [
   ['overview','보안 현황'], ['events','이벤트 모니터링'], ['incidents','보안 사고 분석'],
-  ['users','사용자 행동 분석'], ['behavior','행동 승인 관리'], ['soar','SOAR 대응 제어'], ['cert','CERT 100K 검증']
+  ['users','사용자 행동 분석'], ['endpoints','Endpoint 관리'], ['behavior','행동 승인 관리'], ['soar','SOAR 대응 제어'], ['cert','CERT 100K 검증']
 ]
 
 const koEvent=(v='-')=>({login_success:'로그인 성공',login_failure:'로그인 실패',login_failed:'로그인 실패',process_execution:'프로세스 실행',file_access:'파일 접근',usb_connected:'USB 연결',usb_connection:'USB 연결',document_analysis:'문서 분석',web_upload:'웹 업로드 시도',email_send:'이메일 전송 시도',external_transfer:'외부 전송 시도'}[String(v).toLowerCase()]||v||'-')
@@ -104,6 +105,7 @@ export default function App(){
     {page==='events'&&<EventsPage events={events} monitoredUsers={users} summary={eventSummaryRaw}/>} 
     {page==='incidents'&&<IncidentsPage key={selectedIncidentId||latestIncident?.id||'incident-page'} incidents={incidents} allEvents={events} initialId={selectedIncidentId||latestIncident?.id}/>} 
     {page==='users'&&<UserAnalysisPage events={events} users={users} refresh={refresh}/>} 
+    {page==='endpoints'&&<EndpointManagementPage/>} 
     {page==='behavior'&&<BehaviorPage/>} 
     {page==='soar'&&<SoarControlPage/>} 
     {page==='cert'&&<CertPage/>}<Footer/></div></main></div>
@@ -130,6 +132,7 @@ function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh,collapsed}){
     events:'◫',
     incidents:'◆',
     users:'◎',
+    endpoints:'▣',
     behavior:'✓',
     soar:'↯',
     cert:'C'
@@ -1455,6 +1458,180 @@ function PeerGroupView({profile}){
           : '동일 직무 Peer Group 정상 패턴과 비교할 추가 이탈 근거가 없습니다.'}
       </Notice>
     </>}
+  </>
+}
+
+
+
+function EndpointManagementPage(){
+  const API='https://api.sentineljk.co.kr'
+  const[rows,setRows]=useState([])
+  const[users,setUsers]=useState([])
+  const[err,setErr]=useState('')
+  const[msg,setMsg]=useState('')
+  const[busy,setBusy]=useState('')
+
+  const load=async()=>{
+    try{
+      const[endpointResponse,userResponse]=await Promise.all([
+        fetch(`${API}/endpoints`,{credentials:'include'}),
+        fetch(`${API}/users`,{credentials:'include'})
+      ])
+
+      if(!endpointResponse.ok){
+        throw new Error(`Endpoint 조회 실패 (${endpointResponse.status})`)
+      }
+
+      const endpointData=await endpointResponse.json()
+
+      let userData=[]
+      if(userResponse.ok){
+        const raw=await userResponse.json()
+        userData=Array.isArray(raw)?raw:(raw.items||raw.users||[])
+      }
+
+      setRows(endpointData.items||[])
+      setUsers(userData)
+      setErr('')
+    }catch(error){
+      setErr(error.message)
+    }
+  }
+
+  useEffect(()=>{
+    load()
+    const timer=setInterval(load,5000)
+    return()=>clearInterval(timer)
+  },[])
+
+  const linkEndpoint=async(agentId,username)=>{
+    if(!username)return
+
+    setBusy(agentId)
+    setMsg('')
+    setErr('')
+
+    try{
+      const response=await fetch(
+        `${API}/endpoints/${encodeURIComponent(agentId)}/link`,
+        {
+          method:'POST',
+          credentials:'include',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({username})
+        }
+      )
+
+      const data=await response.json().catch(()=>({}))
+
+      if(!response.ok){
+        throw new Error(
+          data.detail||`사용자 연결 실패 (${response.status})`
+        )
+      }
+
+      setMsg(
+        `${data.endpoint?.hostname||agentId} -> ${username} 연결 완료`
+      )
+
+      await load()
+    }catch(error){
+      setErr(error.message)
+    }finally{
+      setBusy('')
+    }
+  }
+
+  const onlineCount=rows.filter(row=>row.status==='ONLINE').length
+  const offlineCount=rows.filter(row=>row.status==='OFFLINE').length
+  const pendingCount=rows.filter(row=>row.status==='PENDING').length
+
+  const lastSeenLabel=row=>{
+    const seconds=Number(row.last_seen_seconds||0)
+
+    if(seconds<5)return '방금'
+    if(seconds<60)return `${seconds}초 전`
+    if(seconds<3600)return `${Math.floor(seconds/60)}분 전`
+    return `${Math.floor(seconds/3600)}시간 전`
+  }
+
+  return <>
+    <SectionHeader>Endpoint 관리</SectionHeader>
+
+    <div className="section-caption">
+      SENTINEL Agent가 설치된 단말을 자동 등록하고 사용자 연결 및 실시간 Heartbeat 상태를 관리합니다.
+    </div>
+
+    <div className="kpis">
+      <Kpi title="등록 Endpoint" value={rows.length} hint="중앙 SENTINEL 등록 단말"/>
+      <Kpi title="온라인" value={onlineCount} hint="최근 Heartbeat 정상"/>
+      <Kpi title="오프라인" value={offlineCount} hint="Heartbeat 시간 초과" warning={offlineCount>0}/>
+      <Kpi title="승인 대기" value={pendingCount} hint="사용자 연결 필요" warning={pendingCount>0}/>
+    </div>
+
+    {err&&<Notice type="error">{err}</Notice>}
+    {msg&&<Notice>{msg}</Notice>}
+
+    <div className="table-wrap tall">
+      <table>
+        <thead>
+          <tr>
+            <th>상태</th>
+            <th>Hostname</th>
+            <th>Windows 사용자</th>
+            <th>연결 사용자</th>
+            <th>Endpoint IP</th>
+            <th>Network</th>
+            <th>Agent ID</th>
+            <th>마지막 수신</th>
+            <th>사용자 연결</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.length
+            ? rows.map(row=>(
+              <tr key={row.agent_id}>
+                <td>{row.status}</td>
+                <td><b>{row.hostname||'-'}</b></td>
+                <td>{row.windows_user||'-'}</td>
+                <td>{row.linked_user||'미연결'}</td>
+                <td>{row.endpoint_ip||'-'}</td>
+                <td>{row.endpoint_network||'-'}</td>
+                <td>{row.agent_id}</td>
+                <td>{lastSeenLabel(row)}</td>
+                <td>
+                  <select
+                    value={row.linked_user||''}
+                    disabled={busy===row.agent_id}
+                    onChange={event=>linkEndpoint(row.agent_id,event.target.value)}
+                  >
+                    <option value="">사용자 선택</option>
+
+                    {users.map(user=>{
+                      const username=user.username||user.user||''
+                      if(!username)return null
+
+                      return (
+                        <option key={username} value={username}>
+                          {user.display_name||username} / {username}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </td>
+              </tr>
+            ))
+            : (
+              <tr>
+                <td colSpan="9" className="empty-cell">
+                  등록된 Endpoint가 없습니다. Agent를 실행하면 자동 등록됩니다.
+                </td>
+              </tr>
+            )}
+        </tbody>
+      </table>
+    </div>
   </>
 }
 
