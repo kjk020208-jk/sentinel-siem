@@ -161,6 +161,11 @@ def install_auth(app):
         if path.startswith("/auth/"):
             return await call_next(request)
 
+        # GRU next-action API: skip session-cookie auth here.
+        # main.py still enforces SENTINEL Basic admin authentication.
+        if path.startswith("/next-action/predict/") and method == "GET":
+            return await call_next(request)
+
         # Windows Agent 요청은 각 API에서 X-Agent-Token으로 검증
         agent_paths = (
             path == "/events"
@@ -246,16 +251,25 @@ def install_auth(app):
             }
         )
 
-        response.set_cookie(
-            key=COOKIE_NAME,
-            value=_create_session(configured_username),
-            max_age=SESSION_SECONDS,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            domain=".sentineljk.co.kr",
-            path="/",
-        )
+        hostname = (request.url.hostname or "").lower()
+        local_request = hostname in {"127.0.0.1", "localhost", "::1"}
+
+        cookie_kwargs = {
+            "key": COOKIE_NAME,
+            "value": _create_session(configured_username),
+            "max_age": SESSION_SECONDS,
+            "httponly": True,
+            "secure": not local_request,
+            "samesite": "lax",
+            "path": "/",
+        }
+
+        # Production keeps the shared sentineljk.co.kr cookie domain.
+        # Local development must use a host-only, non-Secure cookie.
+        if not local_request:
+            cookie_kwargs["domain"] = ".sentineljk.co.kr"
+
+        response.set_cookie(**cookie_kwargs)
 
         return response
 

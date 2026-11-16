@@ -6285,3 +6285,145 @@ textarea:focus{
 .sentinel-login-footer{
   opacity:.58 !important;
 }
+
+
+/* ===== SENTINEL GRU NEXT ACTION PANEL V1 ===== */
+.gru-next-action-panel{
+  margin:12px 0 26px;
+  padding:20px;
+  border:1px solid rgba(255,255,255,.085);
+  border-radius:16px;
+  background:linear-gradient(180deg,rgba(27,31,38,.82),rgba(14,17,21,.82));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+}
+.gru-next-action-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:24px;
+  padding-bottom:18px;
+  border-bottom:1px solid rgba(255,255,255,.065);
+}
+.gru-next-eyebrow{
+  margin-bottom:7px;
+  color:#7f8791;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+}
+.gru-next-title{
+  color:#f5f5f7;
+  font-size:24px;
+  line-height:1.1;
+  font-weight:720;
+  letter-spacing:-.025em;
+}
+.gru-next-sub{
+  margin-top:8px;
+  color:#8e959f;
+  font-size:11px;
+}
+.gru-next-probability{
+  min-width:150px;
+  text-align:right;
+}
+.gru-next-probability span{
+  display:block;
+  margin-bottom:5px;
+  color:#858c96;
+  font-size:10px;
+}
+.gru-next-probability strong{
+  color:#f5f5f7;
+  font-size:27px;
+  font-weight:720;
+}
+.gru-next-metrics{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin:16px 0;
+}
+.gru-next-metric{
+  min-height:92px;
+  padding:13px 14px;
+  border:1px solid rgba(255,255,255,.065);
+  border-radius:12px;
+  background:rgba(255,255,255,.025);
+}
+.gru-next-metric>span{
+  display:block;
+  color:#858c96;
+  font-size:10px;
+}
+.gru-next-metric>strong{
+  display:block;
+  margin:7px 0 5px;
+  color:#f5f5f7;
+  font-size:20px;
+}
+.gru-next-metric>small{
+  color:#666e78;
+  font-size:9px;
+  line-height:1.4;
+}
+.gru-top3-list{
+  display:grid;
+  gap:7px;
+}
+.gru-top3-row{
+  display:grid;
+  grid-template-columns:34px minmax(150px,220px) minmax(120px,1fr) 72px;
+  align-items:center;
+  gap:10px;
+  min-height:38px;
+  padding:0 10px;
+  border-radius:9px;
+  background:rgba(255,255,255,.022);
+}
+.gru-top3-rank{
+  color:#666e78;
+  font-size:10px;
+  font-variant-numeric:tabular-nums;
+}
+.gru-top3-action{
+  color:#d9dde2;
+  font-size:11px;
+  font-weight:620;
+}
+.gru-top3-bar{
+  height:4px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(255,255,255,.07);
+}
+.gru-top3-bar span{
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:rgba(10,132,255,.72);
+}
+.gru-top3-value{
+  text-align:right;
+  color:#b9c0c8;
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+.gru-next-note,.gru-next-empty{
+  margin-top:14px;
+  padding-top:13px;
+  border-top:1px solid rgba(255,255,255,.055);
+  color:#737b85;
+  font-size:10px;
+  line-height:1.55;
+}
+@media(max-width:900px){
+  .gru-next-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:650px){
+  .gru-next-action-head{display:block}
+  .gru-next-probability{margin-top:14px;text-align:left}
+  .gru-next-metrics{grid-template-columns:1fr}
+  .gru-top3-row{grid-template-columns:28px 1fr 60px}
+  .gru-top3-bar{display:none}
+}

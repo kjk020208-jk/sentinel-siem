@@ -36,6 +36,7 @@ from server.risk_engine import (
 )
 from server.ml_engine import detector
 from server.sequence_engine import analyze_sequence
+from server.next_action_inference import predict_next_actions_for_user
 from server.pii_engine import analyze_document
 from server.dynamic_risk_engine import (
     get_dynamic_user_risk_profile,
@@ -1091,6 +1092,27 @@ def root():
         "status": "running",
         "message": "Insider Threat Detection Server"
     }
+
+
+
+# -------------------------------------------------
+# GRU Next-Action Prediction
+# -------------------------------------------------
+
+@app.get("/next-action/predict/{user}")
+def get_next_action_prediction(
+    user: str,
+    top_k: int = 3,
+    db: Session = Depends(get_db),
+):
+    # GRU probability is separate from Threat Progression evidence confidence.
+    top_k = max(1, min(int(top_k), 10))
+    return predict_next_actions_for_user(
+        db,
+        SecurityEvent,
+        user=user,
+        top_k=top_k,
+    )
 
 
 @app.post("/events")

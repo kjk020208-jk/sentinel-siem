@@ -7,6 +7,7 @@ from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 from server.database import Base
 from server.models import SecurityEvent
 from server.response_control_engine import ResponseControlAction, create_control_action
+from server.next_action_inference import predict_next_actions_for_user
 
 
 class ThreatPrediction(Base):
@@ -46,14 +47,38 @@ USB_TYPES = {'usb_connected','usb_connection'}
 FILE_TYPES = {'file_access','document_analysis'}
 PROCESS_TYPES = {'process_execution'}
 
+GRU_RISK_ACTIONS = {
+    'LOGIN_FAILURE',
+    'SENSITIVE_FILE_ACCESS',
+    'MASS_FILE_ACCESS',
+    'POWERSHELL',
+    'SCRIPT_EXECUTION',
+    'ARCHIVE_CREATE',
+    'USB_COPY',
+    'EXTERNAL_TRANSFER',
+    'WEB_UPLOAD',
+    'EMAIL_SEND',
+}
+
 
 def _serialize(row):
     if row is None:
         return None
     try:
-        evidence = json.loads(row.evidence_json or '[]')
+        raw_evidence = json.loads(row.evidence_json or '[]')
     except Exception:
-        evidence = []
+        raw_evidence = []
+
+    evidence = []
+    gru_meta = None
+    for item in raw_evidence if isinstance(raw_evidence, list) else []:
+        if isinstance(item, str) and item.startswith('GRU_META::'):
+            try:
+                gru_meta = json.loads(item.split('GRU_META::', 1)[1])
+            except Exception:
+                gru_meta = None
+            continue
+        evidence.append(item)
     return {
         'id': row.id,
         'user': row.user,
@@ -65,6 +90,9 @@ def _serialize(row):
         'response_level': row.response_level,
         'recommended_control': row.recommended_control,
         'evidence': evidence,
+        'gru_next_action': (gru_meta or {}).get('gru_next_action'),
+        'gru_risk_probability': (gru_meta or {}).get('gru_risk_probability'),
+        'gru_progress_boost': (gru_meta or {}).get('gru_progress_boost', 0),
         'source_event_id': row.source_event_id,
         'source_risk_score': row.source_risk_score,
         'sequence_score': row.sequence_score,
@@ -167,7 +195,11 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     if usb:
         evidence.append('민감 문서 접근 이후 USB 사용 확인')
     if procs:
-        evidence.append(f"USB 단계 이후 의심 프로세스 실행 · {getattr(procs[-1], 'process_name', None) or 'unknown'}")
+        process_name = getattr(procs[-1], 'process_name', None) or 'unknown'
+        if usb:
+            evidence.append(f"USB 단계 이후 의심 프로세스 실행 · {process_name}")
+        else:
+            evidence.append(f"의심 프로세스 실행 · {process_name}")
     if float(baseline_score or 0) >= 30:
         evidence.append(f'개인 Baseline 이탈 점수 {float(baseline_score):.1f}')
     if float(peer_score or 0) >= 40:
@@ -194,6 +226,60 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     progress += min(5, int(float(sequence_score or 0) / 20))
     progress += min(3, int(float(risk_score or 0) / 30))
     progress = max(0, min(100, int(progress)))
+
+    # ------------------------------------------------------------
+    # GRU learned next-action signal
+    # ------------------------------------------------------------
+    # GRU probability is separate from prediction_confidence.
+    # It provides only a small progression boost and cannot by itself
+    # trigger USB_WRITE_RESTRICT.
+    try:
+        gru_next_action = predict_next_actions_for_user(
+            db,
+            SecurityEvent,
+            user=user,
+            top_k=3,
+            reference_time=reference_time,
+        )
+    except Exception as gru_error:
+        gru_next_action = {
+            'available': False,
+            'reason': str(gru_error),
+            'predictions': [],
+        }
+
+    gru_risk_probability = 0.0
+    gru_progress_boost = 0
+
+    if gru_next_action and gru_next_action.get('available'):
+        gru_predictions = gru_next_action.get('predictions') or []
+
+        top3_text = []
+        for pred in gru_predictions:
+            action = str(pred.get('action') or '').upper()
+            probability = float(pred.get('probability') or 0.0)
+            top3_text.append(f"{action} {probability * 100.0:.1f}%")
+            if action in GRU_RISK_ACTIONS:
+                gru_risk_probability = max(gru_risk_probability, probability)
+
+        if top3_text:
+            evidence.append(
+                'GRU Next-Action Top-3 · ' + ' / '.join(top3_text)
+            )
+
+        if gru_risk_probability >= 0.60:
+            gru_progress_boost = 5
+        elif gru_risk_probability >= 0.35:
+            gru_progress_boost = 3
+        elif gru_risk_probability >= 0.20:
+            gru_progress_boost = 1
+
+        if gru_progress_boost:
+            progress = min(100, progress + gru_progress_boost)
+            evidence.append(
+                f'GRU 위험행동 보조 신호 +{gru_progress_boost} '
+                f'(최대 위험행동 확률 {gru_risk_probability * 100.0:.1f}%)'
+            )
 
     confidence = 20
     confidence += 12 if failure_count >= 3 else (5 if failure_count else 0)
@@ -227,10 +313,23 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
             'prediction_confidence': confidence,
             'response_level': response_level,
             'recommended_control': None,
+            'gru_next_action': gru_next_action,
+            'gru_risk_probability': round(gru_risk_probability, 6),
+            'gru_progress_boost': gru_progress_boost,
             'evidence': evidence,
             'status': 'OBSERVING',
             'control_action': None,
         }
+
+    # Persist structured GRU metadata without DB schema migration.
+    gru_meta_payload = {
+        'gru_next_action': gru_next_action,
+        'gru_risk_probability': round(gru_risk_probability, 6),
+        'gru_progress_boost': gru_progress_boost,
+    }
+    evidence.append(
+        'GRU_META::' + json.dumps(gru_meta_payload, ensure_ascii=False)
+    )
 
     row = ThreatPrediction(
         user=user, target_host=target_host, current_stage=stage,
@@ -277,7 +376,14 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
             row.decision_note = error
             db.commit(); db.refresh(row)
 
-    return {**_serialize(row), 'persisted': True, 'control_action': control_action}
+    return {
+        **_serialize(row),
+        'persisted': True,
+        'control_action': control_action,
+        'gru_next_action': gru_next_action,
+        'gru_risk_probability': round(gru_risk_probability, 6),
+        'gru_progress_boost': gru_progress_boost,
+    }
 
 
 def list_threat_predictions(db, *, user=None, status=None, limit=100):
