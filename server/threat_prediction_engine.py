@@ -240,6 +240,7 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
             user=user,
             top_k=3,
             reference_time=reference_time,
+            host=(target_host or None),
         )
     except Exception as gru_error:
         gru_next_action = {

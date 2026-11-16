@@ -1099,19 +1099,74 @@ def root():
 # GRU Next-Action Prediction
 # -------------------------------------------------
 
+@app.get("/next-action/endpoints")
+def get_next_action_endpoints(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    safe_limit = max(1, min(int(limit or 100), 500))
+
+    rows = (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user.isnot(None))
+        .order_by(SecurityEvent.id.desc())
+        .limit(5000)
+        .all()
+    )
+
+    seen = set()
+    items = []
+
+    for event in rows:
+        user = str(getattr(event, "user", "") or "").strip()
+        host = str(getattr(event, "host", "") or "").strip()
+        agent_id = str(getattr(event, "agent_id", "") or "").strip()
+        endpoint_ip = str(getattr(event, "endpoint_ip", "") or "").strip()
+
+        if not user:
+            continue
+
+        key = (user, agent_id or "", host or "")
+        if key in seen:
+            continue
+        seen.add(key)
+
+        items.append({
+            "user": user,
+            "host": host or None,
+            "agent_id": agent_id or None,
+            "endpoint_ip": endpoint_ip or None,
+            "last_event_at": getattr(event, "timestamp", None),
+            "last_event_id": getattr(event, "id", None),
+        })
+
+        if len(items) >= safe_limit:
+            break
+
+    return {
+        "items": items,
+        "count": len(items),
+    }
+
+
 @app.get("/next-action/predict/{user}")
 def get_next_action_prediction(
     user: str,
     top_k: int = 3,
+    host: Optional[str] = None,
+    agent_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     # GRU probability is separate from Threat Progression evidence confidence.
+    # Sequence scope is user + endpoint when host/agent_id are supplied.
     top_k = max(1, min(int(top_k), 10))
     return predict_next_actions_for_user(
         db,
         SecurityEvent,
         user=user,
         top_k=top_k,
+        host=(host or None),
+        agent_id=(agent_id or None),
     )
 
 

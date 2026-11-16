@@ -1118,6 +1118,8 @@ function SoarControlPage(){
   const[rows,setRows]=useState([])
   const[predictions,setPredictions]=useState([])
   const[liveGru,setLiveGru]=useState(null)
+  const[gruEndpoints,setGruEndpoints]=useState([])
+  const[selectedGruEndpoint,setSelectedGruEndpoint]=useState('')
   const[err,setErr]=useState('')
   const[msg,setMsg]=useState('')
   const[busy,setBusy]=useState('')
@@ -1141,6 +1143,57 @@ function SoarControlPage(){
     return data
   }
 
+  const gruActionKo={
+    LOGIN_SUCCESS:'로그인 성공',
+    LOGIN_FAILURE:'로그인 실패',
+    LOGOFF:'로그오프',
+    FILE_ACCESS:'파일 접근',
+    SENSITIVE_FILE_ACCESS:'민감 문서 접근',
+    MASS_FILE_ACCESS:'대량 파일 접근',
+    USB_CONNECT:'USB 연결',
+    USB_ACTIVITY:'USB 사용',
+    USB_COPY:'USB 파일 복사',
+    PROCESS_EXECUTION:'프로세스 실행',
+    POWERSHELL:'PowerShell 실행',
+    SCRIPT_EXECUTION:'스크립트 실행',
+    ARCHIVE_CREATE:'압축 파일 생성',
+    EMAIL_SEND:'이메일 전송',
+    WEB_UPLOAD:'웹 업로드',
+    EXTERNAL_TRANSFER:'외부 전송',
+    NETWORK_ACCESS:'네트워크 접근',
+    PRIVILEGED_LOGON:'관리자 권한 로그인',
+    EXPLICIT_CREDENTIAL_LOGON:'명시적 자격증명 로그인',
+    WORKSTATION_LOCK:'PC 잠금',
+    WORKSTATION_UNLOCK:'PC 잠금 해제',
+    AUTH_TICKET:'인증 티켓',
+    OTHER:'기타 행동'
+  }
+
+  const responseLevelKo={
+    OBSERVE:'관찰',
+    ENHANCED_MONITORING:'강화 모니터링',
+    PREPARE_CONTROL:'제어 준비',
+    SELECTIVE_PREVENT:'선별적 차단'
+  }
+
+  const endpointKey=e=>[
+    e?.user||'',
+    e?.host||'',
+    e?.agent_id||''
+  ].join('|||')
+
+  const endpointLabel=e=>{
+    const user=e?.user||'사용자 미상'
+    const host=e?.host||'Host 미상'
+    const ip=e?.endpoint_ip?` · ${e.endpoint_ip}`:''
+    return `${host} / ${user}${ip}`
+  }
+
+  const parseEndpointKey=key=>{
+    const[user='',host='',agent_id='']=String(key||'').split('|||')
+    return{user,host,agent_id}
+  }
+
   const load=async()=>{
     try{
       const[controlData,predictionData]=await Promise.all([
@@ -1155,8 +1208,32 @@ function SoarControlPage(){
     }
 
     try{
-      const gruData=await call('/next-action/predict/siem_demo?top_k=3')
-      setLiveGru(gruData?.available?gruData:null)
+      const endpointData=await call('/next-action/endpoints?limit=100')
+      const endpointItems=arr(endpointData,['items','value','endpoints'])
+      setGruEndpoints(endpointItems)
+
+      let targetKey=selectedGruEndpoint
+      if(!targetKey&&endpointItems.length){
+        const preferred=
+          endpointItems.find(e=>String(e?.user||'')==='siem_demo')
+          ||endpointItems[0]
+        targetKey=endpointKey(preferred)
+        setSelectedGruEndpoint(targetKey)
+      }
+
+      if(targetKey){
+        const target=parseEndpointKey(targetKey)
+        const params=new URLSearchParams({top_k:'3'})
+        if(target.host)params.set('host',target.host)
+        if(target.agent_id)params.set('agent_id',target.agent_id)
+
+        const gruData=await call(
+          `/next-action/predict/${encodeURIComponent(target.user)}?${params.toString()}`
+        )
+        setLiveGru(gruData?.available?gruData:null)
+      }else{
+        setLiveGru(null)
+      }
     }catch(e){
       setLiveGru(null)
     }
@@ -1166,7 +1243,7 @@ function SoarControlPage(){
     load()
     const id=setInterval(load,3000)
     return()=>clearInterval(id)
-  },[])
+  },[selectedGruEndpoint])
 
   const loadEvidence=async(id)=>{
     if(!id)return
@@ -1259,7 +1336,13 @@ function SoarControlPage(){
     .sort((a,b)=>num(b.id)-num(a.id))
     .find(p=>p?.gru_next_action?.available)||null
 
+  const selectedGruIdentity=parseEndpointKey(selectedGruEndpoint)
+
   const latestThreatPrediction=[...predictions]
+    .filter(p=>
+      (!selectedGruIdentity.user||String(p?.user||'')===selectedGruIdentity.user)
+      &&(!selectedGruIdentity.host||String(p?.target_host||'')===selectedGruIdentity.host)
+    )
     .sort((a,b)=>num(b.id)-num(a.id))[0]||null
 
   const latestGru=liveGru?.available
@@ -1506,44 +1589,65 @@ function SoarControlPage(){
       </div>
     }
 
-    <SectionHeader>GRU Next Action Prediction</SectionHeader>
+    <SectionHeader>AI 다음 행동 예측</SectionHeader>
     <div className="gru-next-action-panel">
+      <div className="gru-endpoint-toolbar">
+        <div>
+          <span className="gru-endpoint-label">분석 대상 Endpoint</span>
+          <strong>{endpointLabel(
+            gruEndpoints.find(e=>endpointKey(e)===selectedGruEndpoint)
+            ||parseEndpointKey(selectedGruEndpoint)
+          )}</strong>
+        </div>
+        <select
+          className="gru-endpoint-select"
+          value={selectedGruEndpoint}
+          onChange={e=>setSelectedGruEndpoint(e.target.value)}
+        >
+          {gruEndpoints.map(e=>
+            <option key={endpointKey(e)} value={endpointKey(e)}>
+              {endpointLabel(e)}
+            </option>
+          )}
+        </select>
+      </div>
+
       {latestGru?.available
         ? <>
             <div className="gru-next-action-head">
               <div>
-                <div className="gru-next-eyebrow">LEARNED NEXT-ACTION SIGNAL</div>
-                <div className="gru-next-title">{latestGruTop1?.action||'예측 준비 중'}</div>
+                <div className="gru-next-eyebrow">사용자 행동 시퀀스 기반 GRU 예측</div>
+                <div className="gru-next-title">{gruActionKo[latestGruTop1?.action]||latestGruTop1?.action||'예측 준비 중'}</div>
                 <div className="gru-next-sub">
-                  사용자 {latestGru.user||latestGruPrediction?.user||'-'} · 최근 행동 {latestGru.sequence_length_used??'-'}개 기반
+                  사용자 {latestGru.user||'-'} · Endpoint {latestGru.host||'미지정'} · 최근 행동 {latestGru.sequence_length_used??'-'}개 기반
                 </div>
               </div>
               <div className="gru-next-probability">
-                <span>다음 행동 확률</span>
+                <span>예상 확률</span>
                 <strong>{latestGruTop1?.probability_percent==null?'-':`${num(latestGruTop1.probability_percent).toFixed(2)}%`}</strong>
               </div>
             </div>
 
             <div className="gru-next-metrics">
               <div className="gru-next-metric">
-                <span>Evidence Confidence</span>
+                <span>공격 진행 신뢰도</span>
                 <strong>{latestGruPrediction?.prediction_confidence==null?'-':`${latestGruPrediction.prediction_confidence}%`}</strong>
-                <small>현재 공격 진행 근거의 강도</small>
+                <small>현재 공격 단계 판단 근거의 신뢰도</small>
               </div>
               <div className="gru-next-metric">
-                <span>GRU Risk Probability</span>
+                <span>위험 행동 예측 확률</span>
                 <strong>{`${(liveGruRiskProbability*100).toFixed(2)}%`}</strong>
-                <small>Top-3 중 최대 위험행동 확률</small>
+                <small>예측 Top-3 중 위험 행동의 최대 확률</small>
               </div>
               <div className="gru-next-metric">
-                <span>Threat Progress 기여</span>
+                <span>AI 위험도 반영</span>
                 <strong>{`+${liveGruProgressBoost}`}</strong>
-                <small>GRU 보조 신호 가산점</small>
+                <small>GRU 예측이 공격 진행도에 더한 점수</small>
               </div>
               <div className="gru-next-metric">
-                <span>Threat Progress</span>
+                <span>공격 진행도</span>
                 <strong>{latestGruPrediction?.threat_progress==null?'-':`${latestGruPrediction.threat_progress}%`}</strong>
-                <small>{latestGruPrediction?.response_level||'현재 저장된 Threat Progression 없음'}</small>
+                <small>{latestGruPrediction?.response_level?responseLevelKo[latestGruPrediction.response_level]||latestGruPrediction.response_level:'현재 저장된 공격 진행 정보 없음'}</small>
               </div>
             </div>
 
@@ -1551,7 +1655,7 @@ function SoarControlPage(){
               {latestGruTop3.map((p,i)=>
                 <div className="gru-top3-row" key={`${p.action}-${i}`}>
                   <div className="gru-top3-rank">{String(i+1).padStart(2,'0')}</div>
-                  <div className="gru-top3-action">{p.action||'-'}</div>
+                  <div className="gru-top3-action">{gruActionKo[p.action]||p.action||'-'}</div>
                   <div className="gru-top3-bar">
                     <span style={{width:`${Math.max(0,Math.min(100,num(p.probability_percent)))}%`}}/>
                   </div>
@@ -1563,8 +1667,9 @@ function SoarControlPage(){
             </div>
 
             <div className="gru-next-note">
-              GRU 확률은 Predictive Threat Progression의 Evidence Confidence와 별도 값입니다.
-              GRU는 단독 차단 판단이 아니라 기존 Rule · UEBA · Sequence · Risk 판단을 보조합니다.
+              GRU 모델은 선택한 사용자·Endpoint의 최근 행동 순서를 분석해 다음 행동을 예측합니다.
+              '위험 행동 예측 확률'과 '공격 진행 신뢰도'는 서로 다른 값이며,
+              AI 예측은 단독 차단이 아니라 기존 Rule · UEBA · Sequence · Risk 판단을 보조합니다.
             </div>
           </>
         : <div className="gru-next-empty">

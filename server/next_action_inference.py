@@ -185,6 +185,8 @@ def predict_next_actions_for_user(
     user: str,
     top_k: int = 3,
     reference_time=None,
+    host: str | None = None,
+    agent_id: str | None = None,
 ) -> dict:
     if not str(user or "").strip():
         return {"available": False, "reason": "user가 필요합니다.", "predictions": []}
@@ -196,6 +198,13 @@ def predict_next_actions_for_user(
         return {"available": False, "reason": str(exc), "predictions": []}
 
     query = db.query(SecurityEvent).filter(SecurityEvent.user == user)
+
+    if host:
+        query = query.filter(SecurityEvent.host == host)
+
+    if agent_id:
+        query = query.filter(SecurityEvent.agent_id == agent_id)
+
     if reference_time is not None:
         query = query.filter(SecurityEvent.timestamp <= reference_time)
 
@@ -219,5 +228,7 @@ def predict_next_actions_for_user(
 
     result = predict_actions(actions, top_k=top_k)
     result["user"] = user
+    result["host"] = host
+    result["agent_id"] = agent_id
     result["recent_events"] = [_event_payload(event, action) for event, action in mapped]
     return result
