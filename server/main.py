@@ -4073,6 +4073,76 @@ def report_response_control_result(
     return {"message": "Response Agent 결과가 기록되었습니다.", "action": result}
 
 
+
+@app.get("/response-controls/{action_id}/evidence")
+def get_response_control_evidence(
+    action_id: int,
+    db: Session = Depends(get_db),
+):
+    import base64
+    import json
+    from pathlib import Path
+
+    row = (
+        db.query(ResponseControlAction)
+        .filter(ResponseControlAction.id == action_id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="제어 요청을 찾을 수 없습니다.")
+
+    try:
+        processes = json.loads(row.running_processes_json or "[]")
+    except Exception:
+        processes = []
+
+    screenshot_data_url = None
+    screenshot_error = None
+
+    if row.screenshot_path:
+        if str(row.screenshot_path).startswith("SCREENSHOT_SAVE_FAILED:"):
+            screenshot_error = row.screenshot_path
+        else:
+            try:
+                root = Path(__file__).resolve().parent.parent
+                target = (root / row.screenshot_path).resolve()
+
+                if root.resolve() not in target.parents:
+                    raise ValueError("허용되지 않은 Evidence 경로입니다.")
+                if not target.exists():
+                    raise FileNotFoundError(str(target))
+
+                raw = target.read_bytes()
+                screenshot_data_url = (
+                    "data:image/jpeg;base64,"
+                    + base64.b64encode(raw).decode("ascii")
+                )
+            except Exception as exc:
+                screenshot_error = f"화면 캡처를 불러오지 못했습니다: {exc}"
+
+    return {
+        "id": row.id,
+        "user": row.user,
+        "target_host": row.target_host,
+        "action_type": row.action_type,
+        "operation": row.operation,
+        "status": row.status,
+        "reason": row.reason,
+        "user_justification": row.user_justification,
+        "risk_score": row.risk_score,
+        "threat_progress": row.threat_progress,
+        "predicted_vector": row.predicted_vector,
+        "prediction_confidence": row.prediction_confidence,
+        "active_window": row.active_window,
+        "running_processes": processes,
+        "screenshot_path": row.screenshot_path,
+        "screenshot_data_url": screenshot_data_url,
+        "screenshot_error": screenshot_error,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
 @app.post("/response-controls/{action_id}/release-request")
 def create_response_control_release_request(
     action_id: int,
