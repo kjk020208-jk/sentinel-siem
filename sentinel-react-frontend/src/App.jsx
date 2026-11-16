@@ -1374,7 +1374,7 @@ function SoarControlPage(){
   return <>
     <SectionHeader>Predictive Threat Progression</SectionHeader>
     <div className="section-caption">
-      최근 사용자 행동과 Risk · Sequence · Personal/Peer UEBA 신호를 결합해 현재 위협 진행 단계와 다음 공격 벡터를 예측하고,
+      최근 사용자 행동과 Risk · Sequence · Personal/Peer UEBA 신호를 결합해 위협 진행 단계를 판단하며, 표시되는 Prediction 수치는 마지막으로 저장된 탐지 결과입니다.
       조건이 충분한 경우 제한적인 Micro-Control을 수행합니다.
     </div>
 
@@ -1382,14 +1382,14 @@ function SoarControlPage(){
     {msg&&<Notice>{msg}</Notice>}
 
     <div className="st-metric-grid cols4">
-      <StMetric label="현재 위협 단계" value={latestPrediction?.current_stage||'-'} help="최근 Prediction"/>
-      <StMetric label="Threat Progress" value={latestPrediction?.threat_progress==null?'-':`${latestPrediction.threat_progress}%`} help="진행도"/>
-      <StMetric label="Prediction Confidence" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={latestPrediction?.predicted_vector||'-'}/>
+      <StMetric label="최근 탐지 위협 단계" value={latestPrediction?.current_stage||'-'} help="최근 Prediction"/>
+      <StMetric label="최근 탐지 공격 진행도" value={latestPrediction?.threat_progress==null?'-':`${latestPrediction.threat_progress}%`} help="진행도"/>
+      <StMetric label="최근 탐지 신뢰도" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={latestPrediction?.predicted_vector||'-'}/>
       <StMetric label="자동 Micro-Control" value="ON" help="정책 활성 상태"/>
     </div>
 
     {latestPrediction&&<>
-      <SectionHeader>최신 예측 분석</SectionHeader>
+      <SectionHeader>최근 탐지 Prediction</SectionHeader>
       <SimpleTable
         headers={['사용자','대상 Host','현재 단계','예측 벡터','대응 단계','추천 제어','상태','제어 ID']}
         rows={[[
@@ -1630,7 +1630,7 @@ function SoarControlPage(){
 
             <div className="gru-next-metrics">
               <div className="gru-next-metric">
-                <span>공격 진행 신뢰도</span>
+                <span>최근 탐지 신뢰도</span>
                 <strong>{latestGruPrediction?.prediction_confidence==null?'-':`${latestGruPrediction.prediction_confidence}%`}</strong>
                 <small>현재 공격 단계 판단 근거의 신뢰도</small>
               </div>
@@ -1645,9 +1645,11 @@ function SoarControlPage(){
                 <small>GRU 예측이 공격 진행도에 더한 점수</small>
               </div>
               <div className="gru-next-metric">
-                <span>공격 진행도</span>
+                <span>최근 탐지 공격 진행도</span>
                 <strong>{latestGruPrediction?.threat_progress==null?'-':`${latestGruPrediction.threat_progress}%`}</strong>
-                <small>{latestGruPrediction?.response_level?responseLevelKo[latestGruPrediction.response_level]||latestGruPrediction.response_level:'현재 저장된 공격 진행 정보 없음'}</small>
+                <small>{latestGruPrediction?.response_level
+  ? `${responseLevelKo[latestGruPrediction.response_level]||latestGruPrediction.response_level}${latestGruPrediction?.created_at?` · ${fmt(latestGruPrediction.created_at)} KST`:''}`
+  : '최근 저장된 공격 진행 정보 없음'}</small>
               </div>
             </div>
 
