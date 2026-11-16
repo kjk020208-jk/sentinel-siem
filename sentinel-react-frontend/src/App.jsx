@@ -742,7 +742,7 @@ function incidentEvents(inc,allEvents=[]){
 
 function Storyline({events,eventLookup={}}){return <div className="storyline-shell">{events.map((e,idx)=>{const eventId=e.event_id??e.id??'-';const actual=eventLookup[String(eventId)]||{};const stage=e.stage||e.stage_name||e.name||koEvent(e.event_type)||'SECURITY_EVENT';const desc=e.description||e.detail||koEvent(e.event_type)||'-';const file=e.file_name||actual.file_name||actual.file_path;const proc=e.process_name||actual.process_name;const detail=[desc,`Event #${eventId}`,fmt(e.timestamp||actual.timestamp||e.created_at),file?`파일 ${file}`:null,proc?`프로세스 ${proc}`:null].filter(Boolean).join(' · ');const risk=num(actual.risk_score??e.risk_score??e.event_risk_score);const level=actual.risk_level||e.risk_level||e.event_risk_level||'-';const mid=e.mitre_technique_id||e.mitre_technique||'';const mname=e.mitre_technique_name||'ATT&CK 미확정';const tactic=e.mitre_tactic||'Evidence Only';const conf=e.mitre_confidence||'NONE';return <React.Fragment key={`${eventId}-${idx}`}><div className="storyline-step"><div className="storyline-index">{String(idx+1).padStart(2,'0')}</div><div><div className="storyline-name">{stage}</div><div className="storyline-detail">{detail}</div><div className="mitre-row"><span>{mid?`${mid} · ${mname}`:mname}</span><span>{tactic}</span><span>근거 {conf}</span></div>{e.mitre_note&&<div className="storyline-detail">{e.mitre_note}</div>}</div><div className="storyline-risk"><b>{level}</b><br/>Risk {risk.toFixed(2)}</div></div>{idx<events.length-1&&<div className="storyline-arrow">↓</div>}</React.Fragment>})}</div>}
 
-function PlaybookView({data,onAction}){if(!data)return <Notice>Playbook 데이터가 없습니다.</Notice>;const steps=arr(data,['steps','items','playbook_steps']),history=arr(data.history,['items']);const completed=num(data.completed_step_count,steps.filter(s=>['COMPLETED','SKIPPED'].includes(String(s.status).toUpperCase())).length);const total=num(data.total_step_count,steps.length);const progress=num(data.progress_percent,total?completed/total*100:0);return <><div className="playbook-shell"><div className="playbook-top"><div><div className="playbook-name">{data.playbook_name||data.name||data.title||'의심 활동 조사'}</div><div className="playbook-meta">Human approval required · {completed}/{total} 단계 완료</div></div><span className="playbook-status">{data.status||'PENDING'}</span></div><div className="playbook-progress-track"><div className="playbook-progress-fill" style={{width:`${Math.max(0,Math.min(progress,100))}%`}}/></div><div className="playbook-meta">진행률 {progress.toFixed(1)}% · {completed} / {total} 단계 처리</div></div>{steps.map((s,i)=>{const sid=s.step_id||s.id||`PB-${String(i+1).padStart(2,'0')}`;const st=String(s.status||'PENDING').toUpperCase();const approval=Boolean(s.approval_required??s.requires_approval);const approveDisabled=['APPROVED','COMPLETED','SKIPPED'].includes(st);const completeDisabled=['COMPLETED','SKIPPED'].includes(st)||(approval&&st!=='APPROVED');return <div className="playbook-step-wrap" key={sid}><div className="playbook-step-card"><div className="playbook-step-title">{sid} · {s.title||s.name||'대응 단계'}</div><div className="playbook-step-desc">{s.description||s.detail||''}</div><div className="playbook-badges"><span>{st}</span><span>{approval?'관리자 승인 필요':'조사/처리 단계'}</span><span>실제 시스템 자동 실행 없음</span></div></div><div className="playbook-step-actions">{approval&&<button className="btn primary small" disabled={approveDisabled} onClick={()=>onAction(s,'APPROVE')}>승인</button>}<button className="btn primary small" disabled={completeDisabled} onClick={()=>onAction(s,'COMPLETE')}>처리 완료</button></div></div>})}{history.length>0&&<><h4 className="subheading">대응 이력</h4>{[...history].slice(-10).reverse().map((h,i)=><div className="playbook-history" key={i}>{fmt(h.timestamp||h.created_at)} · <b>{({PLAYBOOK_CREATED:'Playbook 생성',STEP_APPROVED:'관리자 승인',STEP_COMPLETED:'처리 완료',STEP_SKIPPED:'단계 건너뜀'}[h.action]||h.action||h.status||'-')}</b> · {h.step_title||'Incident'}</div>)}</>}</>}
+function PlaybookView({data,onAction}){if(!data)return <Notice>Playbook 데이터가 없습니다.</Notice>;const steps=arr(data,['steps','items','playbook_steps']),history=arr(data.history,['items']);const completed=num(data.completed_step_count,steps.filter(s=>['COMPLETED','SKIPPED'].includes(String(s.status).toUpperCase())).length);const total=num(data.total_step_count,steps.length);const progress=num(data.progress_percent,total?completed/total*100:0);return <><div className="playbook-shell"><div className="playbook-top"><div><div className="playbook-name">{data.playbook_name||data.name||data.title||'의심 활동 조사'}</div><div className="playbook-meta">Human approval required · {completed}/{total} 단계 완료</div></div><span className="playbook-status">{data.status||'PENDING'}</span></div><div className="playbook-progress-track"><div className="playbook-progress-fill" style={{width:`${Math.max(0,Math.min(progress,100))}%`}}/></div><div className="playbook-meta">진행률 {progress.toFixed(1)}% · {completed} / {total} 단계 처리</div></div>{steps.map((s,i)=>{const sid=s.step_id||s.id||`PB-${String(i+1).padStart(2,'0')}`;const st=String(s.status||'PENDING').toUpperCase();const approval=Boolean(s.approval_required??s.requires_approval);const approveDisabled=['APPROVED','COMPLETED','SKIPPED'].includes(st);const completeDisabled=['COMPLETED','SKIPPED'].includes(st)||(approval&&st!=='APPROVED');return <div className="playbook-step-wrap" key={sid}><div className="playbook-step-card"><div className="playbook-step-title">{sid} · {s.title||s.name||'대응 수준'}</div><div className="playbook-step-desc">{s.description||s.detail||''}</div><div className="playbook-badges"><span>{st}</span><span>{approval?'관리자 승인 필요':'조사/처리 단계'}</span><span>실제 시스템 자동 실행 없음</span></div></div><div className="playbook-step-actions">{approval&&<button className="btn primary small" disabled={approveDisabled} onClick={()=>onAction(s,'APPROVE')}>승인</button>}<button className="btn primary small" disabled={completeDisabled} onClick={()=>onAction(s,'COMPLETE')}>처리 완료</button></div></div>})}{history.length>0&&<><h4 className="subheading">대응 이력</h4>{[...history].slice(-10).reverse().map((h,i)=><div className="playbook-history" key={i}>{fmt(h.timestamp||h.created_at)} · <b>{({PLAYBOOK_CREATED:'Playbook 생성',STEP_APPROVED:'관리자 승인',STEP_COMPLETED:'처리 완료',STEP_SKIPPED:'단계 건너뜀'}[h.action]||h.action||h.status||'-')}</b> · {h.step_title||'Incident'}</div>)}</>}</>}
 
 function unwrapAiResponse(response){
   if(response==null)return null
@@ -1371,8 +1371,20 @@ function SoarControlPage(){
 
   const latestGruPrediction=latestThreatPrediction
 
+  const vectorKo=v=>({
+    NONE:'없음',
+    ACCOUNT_COMPROMISE:'계정 탈취 가능성',
+    SENSITIVE_DATA_ACCESS:'민감정보 접근',
+    USB_EXFILTRATION:'USB 기반 정보 유출',
+    POTENTIAL_EXFILTRATION:'정보 유출 가능성'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const controlKo=v=>({
+    USB_WRITE_RESTRICT:'USB 쓰기 제한'
+  }[String(v||'').toUpperCase()]||v||'없음')
+
   return <>
-    <SectionHeader>Predictive Threat Progression</SectionHeader>
+    <SectionHeader>공격 진행 단계 분석</SectionHeader>
     <div className="section-caption">
       최근 사용자 행동과 Risk · Sequence · Personal/Peer UEBA 신호를 결합해 위협 진행 단계를 판단하며, 표시되는 Prediction 수치는 마지막으로 저장된 탐지 결과입니다.
       조건이 충분한 경우 제한적인 Micro-Control을 수행합니다.
@@ -1382,16 +1394,16 @@ function SoarControlPage(){
     {msg&&<Notice>{msg}</Notice>}
 
     <div className="st-metric-grid cols4">
-      <StMetric label="최근 탐지 위협 단계" value={latestPrediction?.current_stage||'-'} help="최근 Prediction"/>
+      <StMetric label="최근 탐지 위협 단계" value={latestPrediction?stageKo(latestPrediction.current_stage):'-'} help="최근 Prediction"/>
       <StMetric label="최근 탐지 공격 진행도" value={latestPrediction?.threat_progress==null?'-':`${latestPrediction.threat_progress}%`} help="진행도"/>
       <StMetric label="최근 탐지 신뢰도" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={latestPrediction?.predicted_vector||'-'}/>
-      <StMetric label="자동 Micro-Control" value="ON" help="정책 활성 상태"/>
+      <StMetric label="자동 선제 제어" value="ON" help="정책 활성 상태"/>
     </div>
 
     {latestPrediction&&<>
       <SectionHeader>최근 탐지 Prediction</SectionHeader>
       <SimpleTable
-        headers={['사용자','대상 Host','현재 단계','예측 벡터','대응 단계','추천 제어','상태','제어 ID']}
+        headers={['사용자','대상 Host','탐지 단계','예상 공격 경로','대응 수준','권장 제어','상태','제어 ID']}
         rows={[[
           latestPrediction.user||'-',
           latestPrediction.target_host||'-',
@@ -1405,7 +1417,7 @@ function SoarControlPage(){
       />
     </>}
 
-    <SectionHeader>Prediction 제어 판단</SectionHeader>
+    <SectionHeader>예측 기반 제어 판단</SectionHeader>
     {proposedPredictions.length===0
       ? <Notice>현재 관리자의 판단을 기다리는 Prediction이 없습니다.</Notice>
       : <div className="table-wrap"><table>
@@ -1415,9 +1427,9 @@ function SoarControlPage(){
           </tr></thead>
           <tbody>{proposedPredictions.map(p=><tr key={p.id}>
             <td>#{p.id}</td><td>{p.user||'-'}</td><td>{p.target_host||'-'}</td>
-            <td>{p.current_stage||'-'}</td><td>{p.threat_progress??'-'}%</td>
-            <td>{p.predicted_vector||'-'}</td><td>{p.prediction_confidence??'-'}%</td>
-            <td>{p.recommended_control||'-'}</td>
+            <td>{stageKo(p.current_stage)}</td><td>{p.threat_progress??'-'}%</td>
+            <td>{vectorKo(p.predicted_vector)}</td><td>{p.prediction_confidence??'-'}%</td>
+            <td>{controlKo(p.recommended_control)}</td>
             <td><div className="alert-actions">
               <button className="btn primary small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'APPROVE')}>승인</button>
               <button className="btn small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'REJECT')}>거절</button>
@@ -1426,15 +1438,15 @@ function SoarControlPage(){
         </table></div>
     }
 
-    <SectionHeader>Prediction 이력</SectionHeader>
+    <SectionHeader>공격 진행 예측 이력</SectionHeader>
     <SimpleTable
       tall
-      headers={['ID','시각','사용자','Host','단계','진행도','예측 벡터','신뢰도','대응 단계','추천 제어','상태','제어 ID']}
+      headers={['ID','시각','사용자','Host','단계','진행도','예상 공격 경로','신뢰도','대응 수준','권장 제어','상태','제어 ID']}
       rows={orderedPredictions.map(p=>[
         `#${p.id}`,fmt(p.updated_at||p.created_at),p.user||'-',p.target_host||'-',
-        p.current_stage||'-',p.threat_progress==null?'-':`${p.threat_progress}%`,
-        p.predicted_vector||'-',p.prediction_confidence==null?'-':`${p.prediction_confidence}%`,
-        p.response_level||'-',p.recommended_control||'-',p.status||'-',
+        stageKo(p.current_stage),p.threat_progress==null?'-':`${p.threat_progress}%`,
+        vectorKo(p.predicted_vector),p.prediction_confidence==null?'-':`${p.prediction_confidence}%`,
+        responseLevelKo(p.response_level),controlKo(p.recommended_control),p.status||'-',
         p.control_action_id?`#${p.control_action_id}`:'-'
       ])}
     />
@@ -1512,7 +1524,7 @@ function SoarControlPage(){
                   ['Risk',evidence.risk_score??'-'],
                   ['Threat Progress',evidence.threat_progress==null?'-':`${evidence.threat_progress}%`],
                   ['Prediction Confidence',evidence.prediction_confidence==null?'-':`${evidence.prediction_confidence}%`],
-                  ['예측 벡터',evidence.predicted_vector||'-']
+                  ['예상 공격 경로',evidence.predicted_vector||'-']
                 ].map(([k,v])=><div key={k} style={{
                   border:'1px solid rgba(148,163,184,.14)',borderRadius:10,padding:'10px 12px',minWidth:0
                 }}>
@@ -1683,7 +1695,7 @@ function SoarControlPage(){
     <SectionHeader>실제 제어 이력</SectionHeader>
     <SimpleTable
       tall
-      headers={['ID','시각','사용자','Host','동작','제어 유형','상태','Risk','진행도','예측 벡터','신뢰도','요청 주체','Agent 결과']}
+      headers={['ID','시각','사용자','Host','동작','제어 유형','상태','Risk','진행도','예상 공격 경로','신뢰도','요청 주체','Agent 결과']}
       rows={ordered.map(r=>[
         `#${r.id}`,fmt(r.updated_at||r.completed_at||r.created_at),r.user||'-',
         r.target_host||'-',operationKo(r.operation),r.action_type||'-',statusKo(r.status),
