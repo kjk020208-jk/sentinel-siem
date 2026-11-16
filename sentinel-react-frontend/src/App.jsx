@@ -1371,6 +1371,15 @@ function SoarControlPage(){
 
   const latestGruPrediction=latestThreatPrediction
 
+  const stageKo=v=>({
+    NORMAL_ACTIVITY:'정상 활동',
+    ACCESS_ATTEMPT:'접근 시도',
+    ACCOUNT_ACCESS:'계정 접근',
+    SENSITIVE_DATA_ACCESS:'민감정보 접근',
+    DEVICE_PREPARATION:'장치 준비',
+    EXFILTRATION_PREPARATION:'유출 준비'
+  }[String(v||'').toUpperCase()]||v||'-')
+
   const vectorKo=v=>({
     NONE:'없음',
     ACCOUNT_COMPROMISE:'계정 탈취 가능성',
@@ -1660,7 +1669,7 @@ function SoarControlPage(){
                 <span>최근 탐지 공격 진행도</span>
                 <strong>{latestGruPrediction?.threat_progress==null?'-':`${latestGruPrediction.threat_progress}%`}</strong>
                 <small>{latestGruPrediction?.response_level
-  ? `${responseLevelKo[latestGruPrediction.response_level]||latestGruPrediction.response_level}${latestGruPrediction?.created_at?` · ${fmt(latestGruPrediction.created_at)} KST`:''}`
+  ? `${responseLevelKo(latestGruPrediction.response_level)}${latestGruPrediction?.created_at?` · ${fmt(latestGruPrediction.created_at)} KST`:''}`
   : '최근 저장된 공격 진행 정보 없음'}</small>
               </div>
             </div>
