@@ -35,7 +35,7 @@ class ResponseControlAction(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
 
-VALID_ACTION_TYPES = {"USB_WRITE_RESTRICT"}
+VALID_ACTION_TYPES = {"USB_WRITE_RESTRICT", "PROCESS_TERMINATE"}
 VALID_OPERATIONS = {"APPLY", "RELEASE"}
 
 

@@ -658,6 +658,27 @@ function SimpleTable({headers,rows,short=false,tall=false}){return <div classNam
 
 function EventsPage({events,monitoredUsers=[],summary}){
   const[level,setLevel]=useState('전체'),[user,setUser]=useState('전체'),[type,setType]=useState('전체'),[search,setSearch]=useState(''),[selectedBehavior,setSelectedBehavior]=useState(''),[selectedExplain,setSelectedExplain]=useState(''),[explanation,setExplanation]=useState(null),[exErr,setExErr]=useState(''),[eventAI,setEventAI]=useState(null),[eventAiError,setEventAiError]=useState(''),[aiBusy,setAiBusy]=useState(false)
+
+  useEffect(()=>{
+    const focusId=sessionStorage.getItem('sentinel_focus_event_id')
+    if(!focusId)return
+
+    const target=events.find(e=>String(e.id??e.event_id)===String(focusId))
+    if(!target)return
+
+    setLevel('전체')
+    setUser('전체')
+    setType('전체')
+    setSearch('')
+    setSelectedExplain(String(focusId))
+    setExplanation(null)
+    setEventAI(null)
+    setExErr('')
+
+    api.riskExplanation(focusId)
+      .then(setExplanation)
+      .catch(e=>setExErr(e.message))
+  },[])
   const levels=['전체',...new Set(events.map(e=>e.risk_level).filter(Boolean))]
   const monitoredUserNames=monitoredUsers
     .filter(u=>u.monitoring_enabled===true||u.enabled===true||u.is_enabled===true)
@@ -780,6 +801,11 @@ function RiskExplanation({data}){
 function IncidentSelector({incidents,selectedId,setSelectedId}){return <select className="select" value={selectedId||''} onChange={e=>setSelectedId(e.target.value)}>{incidents.map(i=>{const iid=i.id||i.incident_id;const sev=String(i.severity||i.risk_level||'-').toUpperCase();const stat=String(i.status||'OPEN').toUpperCase();const user=i.user||i.username||'-';const corr=num(i.correlation_score).toFixed(1);const title=i.title||i.incident_type||'보안 사고';return <option key={iid} value={iid}>{`${iid}  |  ${sev}  |  ${stat}  |  ${user}  |  Correlation ${corr}  |  ${title}`}</option>})}</select>}
 function IncidentsPage({incidents,allEvents=[],initialId}){
   const[level,setLevel]=useState('전체'),[status,setStatus]=useState('전체'),[id,setId]=useState(initialId||incidents[0]?.id||''),[detail,setDetail]=useState(null),[err,setErr]=useState(''),[ai,setAi]=useState(null),[incidentAiError,setIncidentAiError]=useState(''),[aiBusy,setAiBusy]=useState(false),[playbook,setPlaybook]=useState(null),[selectedEvent,setSelectedEvent]=useState(''),[eventExplain,setEventExplain]=useState(null),[eventAI,setEventAI]=useState(null),[eventAiError,setEventAiError]=useState(''),[eventAiBusy,setEventAiBusy]=useState(false)
+
+  useEffect(()=>{
+    const focusIncident=sessionStorage.getItem('sentinel_focus_incident_id')
+    if(focusIncident)setId(String(focusIncident))
+  },[])
   const filtered=incidents.filter(i=>(level==='전체'||String(i.severity||i.risk_level).toUpperCase()===level)&&(status==='전체'||String(i.status||'OPEN').toUpperCase()===status))
   useEffect(()=>{if(!filtered.some(i=>String(i.id||i.incident_id)===String(id))&&filtered[0])setId(String(filtered[0].id||filtered[0].incident_id))},[level,status,incidents.length])
   useEffect(()=>{
@@ -793,7 +819,10 @@ function IncidentsPage({incidents,allEvents=[],initialId}){
     api.incident(id).then(d=>{
       setDetail(d)
       const ev=incidentEvents(d,allEvents)
-      if(ev[0])setSelectedEvent(String(ev[0].id||ev[0].event_id))
+      const focusEvent=sessionStorage.getItem('sentinel_focus_event_id')
+      const focused=focusEvent&&ev.find(x=>String(x.id||x.event_id)===String(focusEvent))
+      if(focused)setSelectedEvent(String(focused.id||focused.event_id))
+      else if(ev[0])setSelectedEvent(String(ev[0].id||ev[0].event_id))
     }).catch(e=>setErr(e.message))
     api.playbook(id).then(setPlaybook).catch(()=>setPlaybook(null))
   },[id])
@@ -1432,6 +1461,13 @@ function PeerGroupView({profile}){
 
 function SoarControlPage(){
   const SOAR_API='https://api.sentineljk.co.kr'
+  const[alertContext]=useState(()=>{
+    try{
+      return JSON.parse(sessionStorage.getItem('sentinel_soar_event_context')||'null')
+    }catch{
+      return null
+    }
+  })
   const[rows,setRows]=useState([])
   const[predictions,setPredictions]=useState([])
   const[liveGru,setLiveGru]=useState(null)
@@ -1444,6 +1480,46 @@ function SoarControlPage(){
   const[selectedReleaseId,setSelectedReleaseId]=useState(null)
   const[evidence,setEvidence]=useState(null)
   const[evidenceBusy,setEvidenceBusy]=useState(false)
+
+  const queueDlpProcessTerminate=async()=>{
+    if(!alertContext||busy)return
+
+    const process=String(alertContext.process_name||'').toLowerCase()
+    const allowed=[
+      'chrome.exe','msedge.exe','firefox.exe','brave.exe',
+      'opera.exe','outlook.exe','olk.exe','thunderbird.exe'
+    ]
+
+    if(!allowed.includes(process)){
+      setErr(`실제 종료 지원 대상 프로세스가 아닙니다: ${process||'-'}`)
+      return
+    }
+
+    setBusy('dlp-process-terminate')
+    setMsg('')
+    setErr('')
+
+    try{
+      const result=await call('/response-controls',{
+        method:'POST',
+        body:JSON.stringify({
+          user:alertContext.user||'siem_demo',
+          action_type:'PROCESS_TERMINATE',
+          operation:'APPLY',
+          reason:`DLP_WEB_UPLOAD_BLOCK process=${process} event_id=${alertContext.id??alertContext.event_id??''}`,
+          risk_score:Math.round(num(alertContext.risk_score)),
+          requested_by:'DLP_ALERT_ADMIN'
+        })
+      })
+
+      setMsg(`실제 프로세스 종료 제어가 Agent 큐에 등록되었습니다. Action #${result?.action?.id??'-'} · ${process}`)
+      await load()
+    }catch(e){
+      setErr(e.message)
+    }finally{
+      setBusy('')
+    }
+  }
 
   const call=async(path,options={})=>{
     const response=await fetch(`${SOAR_API}${path}`,{
@@ -1688,7 +1764,7 @@ function SoarControlPage(){
 
   const latestGruPrediction=latestThreatPrediction
 
-  return <>
+  return <>{alertContext&&<Notice type="warning"><b>DLP 대응 대상 이벤트 · Event #{alertContext.id??alertContext.event_id??'-'}</b><br/>{alertContext.user||'-'} {'·'} {koEvent(alertContext.event_type)} {'·'} Risk {num(alertContext.risk_score).toFixed(2)} {'·'} {alertContext.process_name||'-'}<div className="alert-actions"><button className="btn danger" disabled={Boolean(busy)} onClick={queueDlpProcessTerminate}>{busy==='dlp-process-terminate'?'제어 요청 중...':'탐지 프로세스 즉시 종료'}</button></div></Notice>}
     <SectionHeader>Predictive Threat Progression</SectionHeader>
     <div className="section-caption">
       최근 사용자 행동과 Risk · Sequence · Personal/Peer UEBA 신호를 결합해 위협 진행 단계를 판단하며, 표시되는 Prediction 수치는 마지막으로 저장된 탐지 결과입니다.
@@ -2115,7 +2191,61 @@ function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage
   const latest=events[0]
   const latestRiskEventForAlertV2=events.find(e=>['HIGH','CRITICAL'].includes(String(e.risk_level||'').toUpperCase()))||null
   const latestRiskAlertIdV2=String(latestRiskEventForAlertV2?.id??latestRiskEventForAlertV2?.event_id??'')
-  useEffect(()=>{if(latestRiskAlertIdV2)setOverviewV2AckEventId('')},[latestRiskAlertIdV2])
+  const ALERT_ACK_KEY='sentinel_acknowledged_security_events_v1'
+
+  const isAlertAcknowledged=(()=>{
+    try{
+      const ids=JSON.parse(localStorage.getItem(ALERT_ACK_KEY)||'[]')
+      return Array.isArray(ids)&&ids.map(String).includes(latestRiskAlertIdV2)
+    }catch{
+      return false
+    }
+  })()
+
+  const acknowledgeCurrentAlert=()=>{
+    try{
+      const raw=JSON.parse(localStorage.getItem(ALERT_ACK_KEY)||'[]')
+      const ids=Array.isArray(raw)?raw.map(String):[]
+      if(!ids.includes(latestRiskAlertIdV2))ids.push(latestRiskAlertIdV2)
+      localStorage.setItem(ALERT_ACK_KEY,JSON.stringify(ids.slice(-200)))
+    }catch{}
+    setOverviewV2AckEventId(latestRiskAlertIdV2)
+  }
+
+  const openCurrentAlertDetail=()=>{
+    if(!latestRiskEventForAlertV2)return
+    acknowledgeCurrentAlert()
+
+    const eventId=String(latestRiskEventForAlertV2.id??latestRiskEventForAlertV2.event_id??'')
+    sessionStorage.setItem('sentinel_focus_event_id',eventId)
+
+    const incidentIds=[]
+    if(Array.isArray(latestIncident?.event_ids))incidentIds.push(...latestIncident.event_ids)
+    if(Array.isArray(latestIncident?.related_event_ids))incidentIds.push(...latestIncident.related_event_ids)
+    if(Array.isArray(latestIncident?.storyline)){
+      latestIncident.storyline.forEach(s=>incidentIds.push(s?.event_id??s?.id))
+    }
+
+    const belongsToLatestIncident=incidentIds.some(x=>String(x)===eventId)
+    if(belongsToLatestIncident){
+      const iid=String(latestIncident?.id??latestIncident?.incident_id??'')
+      if(iid)sessionStorage.setItem('sentinel_focus_incident_id',iid)
+      setPage('incidents')
+    }else{
+      sessionStorage.removeItem('sentinel_focus_incident_id')
+      setPage('events')
+    }
+  }
+
+  const openCurrentAlertSoar=()=>{
+    if(!latestRiskEventForAlertV2)return
+    acknowledgeCurrentAlert()
+    sessionStorage.setItem(
+      'sentinel_soar_event_context',
+      JSON.stringify(latestRiskEventForAlertV2)
+    )
+    setPage('soar')
+  }
 
 
   const topEvents=events
@@ -2217,7 +2347,7 @@ function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage
 
   return (
     <>
-      {latestRiskEventForAlertV2&&latestRiskAlertIdV2!==overviewV2AckEventId&&(
+      {latestRiskEventForAlertV2&&!isAlertAcknowledged&&latestRiskAlertIdV2!==overviewV2AckEventId&&(
         <div className="critical-alert overview-v2-live-alert">
           <div className="live-alert-top">
             <div className="live-alert-title">LIVE SECURITY ALERT</div>
@@ -2237,8 +2367,9 @@ function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage
             {latestRiskEventForAlertV2.process_name&&<> {'·'} {'프로세스'} {latestRiskEventForAlertV2.process_name}</>}
           </div>
           <div className="alert-actions">
-            <button className="btn danger" onClick={()=>setPage('events')}>{'이벤트 상세 확인'}</button>
-            <button className="btn ghost" onClick={()=>setOverviewV2AckEventId(latestRiskAlertIdV2)}>{'확인'}</button>
+            <button className="btn danger" onClick={openCurrentAlertDetail}>{'이벤트 상세 확인'}</button>
+            <button className="btn primary" onClick={openCurrentAlertSoar}>{'SOAR 즉시 대응'}</button>
+            <button className="btn ghost" onClick={acknowledgeCurrentAlert}>{'확인'}</button>
           </div>
         </div>
       )}
