@@ -2077,6 +2077,7 @@ function Footer(){return <div className="footer"><span>SENTINEL · 내부자 위
 
 
 function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage,error,latency}){
+  const[overviewV2AckEventId,setOverviewV2AckEventId]=useState('')
   const levels=['LOW','MEDIUM','HIGH','CRITICAL']
 
   const counts=levels.map(level=>[
@@ -2112,6 +2113,10 @@ function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage
     : 0
 
   const latest=events[0]
+  const latestRiskEventForAlertV2=events.find(e=>['HIGH','CRITICAL'].includes(String(e.risk_level||'').toUpperCase()))||null
+  const latestRiskAlertIdV2=String(latestRiskEventForAlertV2?.id??latestRiskEventForAlertV2?.event_id??'')
+  useEffect(()=>{if(latestRiskAlertIdV2)setOverviewV2AckEventId('')},[latestRiskAlertIdV2])
+
 
   const topEvents=events
     .slice()
@@ -2212,6 +2217,32 @@ function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage
 
   return (
     <>
+      {latestRiskEventForAlertV2&&latestRiskAlertIdV2!==overviewV2AckEventId&&(
+        <div className="critical-alert overview-v2-live-alert">
+          <div className="live-alert-top">
+            <div className="live-alert-title">LIVE SECURITY ALERT</div>
+            <div className="live-alert-time">{fmt(latestRiskEventForAlertV2.timestamp||latestRiskEventForAlertV2.created_at)}</div>
+          </div>
+          <div className="live-alert-main">
+            {['web_upload','email_send','external_transfer'].includes(String(latestRiskEventForAlertV2.event_type||'').toLowerCase())
+              ? '대외비 외부 전송 시도 감지'
+              : `${String(latestRiskEventForAlertV2.risk_level||'HIGH').toUpperCase()} 보안 이벤트 감지`}
+          </div>
+          <div className="live-alert-meta">
+            {'사용자'} {latestRiskEventForAlertV2.user||'-'} {'·'}
+            {' '}{koEvent(latestRiskEventForAlertV2.event_type)} {'·'}
+            {' '}Risk {num(latestRiskEventForAlertV2.risk_score).toFixed(2)} {'·'}
+            {' '}Event #{latestRiskEventForAlertV2.id||latestRiskEventForAlertV2.event_id}
+            {latestRiskEventForAlertV2.file_name&&<> {'·'} {'파일'} {latestRiskEventForAlertV2.file_name}</>}
+            {latestRiskEventForAlertV2.process_name&&<> {'·'} {'프로세스'} {latestRiskEventForAlertV2.process_name}</>}
+          </div>
+          <div className="alert-actions">
+            <button className="btn danger" onClick={()=>setPage('events')}>{'이벤트 상세 확인'}</button>
+            <button className="btn ghost" onClick={()=>setOverviewV2AckEventId(latestRiskAlertIdV2)}>{'확인'}</button>
+          </div>
+        </div>
+      )}
+
       <div className="overview-v2">
 
         <section className="ov2-hero">
