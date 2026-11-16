@@ -17,7 +17,7 @@ const MENU = [
   ['users','사용자 행동 분석'], ['behavior','행동 승인 관리'], ['soar','SOAR 대응 제어'], ['cert','CERT 100K 검증']
 ]
 
-const koEvent=(v='-')=>({login_success:'로그인 성공',login_failure:'로그인 실패',login_failed:'로그인 실패',process_execution:'프로세스 실행',file_access:'파일 접근',usb_connected:'USB 연결',usb_connection:'USB 연결',document_analysis:'문서 분석'}[String(v).toLowerCase()]||v||'-')
+const koEvent=(v='-')=>({login_success:'로그인 성공',login_failure:'로그인 실패',login_failed:'로그인 실패',process_execution:'프로세스 실행',file_access:'파일 접근',usb_connected:'USB 연결',usb_connection:'USB 연결',document_analysis:'문서 분석',web_upload:'웹 업로드 시도',email_send:'이메일 전송 시도',external_transfer:'외부 전송 시도'}[String(v).toLowerCase()]||v||'-')
 const num=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d
 const arr=(v,keys=[])=>{if(Array.isArray(v))return v;for(const k of keys)if(Array.isArray(v?.[k]))return v[k];return []}
 const fmt=v=>{if(!v)return'-';const d=new Date(v);if(Number.isNaN(d.getTime()))return String(v);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`}
@@ -33,6 +33,7 @@ function usePolling(fn, interval=3000, refreshKey=0){
 
 export default function App(){
   const [page,setPage]=useState('overview'),[autoRefresh,setAutoRefresh]=useState(true),[refreshKey,setRefreshKey]=useState(0)
+  const [selectedIncidentId,setSelectedIncidentId]=useState('')
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false)
   const [eventsRaw,eventsErr,,eventsLatency]=usePolling(api.events,autoRefresh?3000:86400000,refreshKey)
   const [eventSummaryRaw]=usePolling(api.eventSummary,autoRefresh?3000:86400000,refreshKey)
@@ -46,6 +47,39 @@ export default function App(){
   const events=useMemo(()=>activeUsers.size?rawEvents.filter(e=>activeUsers.has(String(e.user||''))):rawEvents,[rawEvents,activeUsers])
   const criticalOpen=incidents.filter(i=>String(i.severity||i.risk_level).toUpperCase()==='CRITICAL'&&String(i.status||'OPEN').toUpperCase()!=='CLOSED').sort((a,b)=>String(b.last_seen||'').localeCompare(String(a.last_seen||''))||num(b.id)-num(a.id))
   const latestIncident=criticalOpen[0]||incidents[0]
+
+  const latestRiskEvent=events.find(e=>
+    ['HIGH','CRITICAL'].includes(
+      String(e.risk_level||'').toUpperCase()
+    )
+  )||null
+
+  const matchingRiskIncident=latestRiskEvent
+    ? incidents
+        .filter(i=>
+          String(i.user||i.username||'')===String(latestRiskEvent.user||'')
+          &&String(i.status||'OPEN').toUpperCase()!=='CLOSED'
+        )
+        .sort((a,b)=>
+          num(b.id||b.incident_id)-num(a.id||a.incident_id)
+        )[0]||null
+    : null
+
+  const openRiskAlert=()=>{
+    if(matchingRiskIncident){
+      setSelectedIncidentId(
+        String(
+          matchingRiskIncident.id||
+          matchingRiskIncident.incident_id||
+          ''
+        )
+      )
+      setPage('incidents')
+    }else{
+      setPage('events')
+    }
+  }
+
   const refresh=()=>setRefreshKey(x=>x+1)
   return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>
     <button
@@ -68,7 +102,7 @@ export default function App(){
     <main className="main"><TopBar/><div className="content"><PageHeader page={page}/>
     {page==='overview'&&<OverviewV2 events={events} users={users} summary={eventSummaryRaw} behaviorChanges={behaviorChangesRaw} latestIncident={latestIncident} setPage={setPage} error={eventsErr} latency={eventsLatency}/>} 
     {page==='events'&&<EventsPage events={events} monitoredUsers={users} summary={eventSummaryRaw}/>} 
-    {page==='incidents'&&<IncidentsPage incidents={incidents} allEvents={events} initialId={latestIncident?.id}/>} 
+    {page==='incidents'&&<IncidentsPage key={selectedIncidentId||latestIncident?.id||'incident-page'} incidents={incidents} allEvents={events} initialId={selectedIncidentId||latestIncident?.id}/>} 
     {page==='users'&&<UserAnalysisPage events={events} users={users} refresh={refresh}/>} 
     {page==='behavior'&&<BehaviorPage/>} 
     {page==='soar'&&<SoarControlPage/>} 
@@ -245,6 +279,92 @@ function Overview({events,users,summary,latestIncident,setPage,error,latency}){
     <SectionHeader>주요 보안 경보</SectionHeader><AlertTable events={alerts}/><SectionHeader>최근 보안 이벤트</SectionHeader><EventTable events={events.slice(0,50)} tall/>
     <SectionHeader>시스템 성능 / 운영 참고</SectionHeader><div className="section-caption">사고 판단과 직접 관련된 지표가 아니라 현재 수집·API 상태를 확인하기 위한 운영 참고 정보입니다.</div><div className="metric4"><MetricCard label="최근 60초 이벤트" value={recent60}/><MetricCard label="관측 EPS" value={(recent60/60).toFixed(2)}/><MetricCard label="/events 응답 지연" value={latency==null?'-':`${latency.toFixed(1)} ms`}/><MetricCard label="현재 조회 이벤트" value={events.length}/></div></>
 }
+function GlobalSecurityAlert({event,incident,onOpen}){
+  const eventId=event?.id??event?.event_id??''
+  const severity=String(event?.risk_level||'HIGH').toUpperCase()
+  const signature=`event:${eventId}:${severity}`
+  const storageKey='sentinel_acknowledged_risk_alerts'
+
+  const readAcked=()=>{
+    try{
+      return new Set(JSON.parse(localStorage.getItem(storageKey)||'[]'))
+    }catch{
+      return new Set()
+    }
+  }
+
+  const[hidden,setHidden]=useState(()=>readAcked().has(signature))
+
+  useEffect(()=>{
+    setHidden(readAcked().has(signature))
+  },[signature])
+
+  const acknowledge=()=>{
+    const acked=readAcked()
+    acked.add(signature)
+    try{
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify([...acked].slice(-200))
+      )
+    }catch{}
+    setHidden(true)
+  }
+
+  if(hidden)return null
+
+  const isDlp=['web_upload','email_send','external_transfer'].includes(
+    String(event?.event_type||'').toLowerCase()
+  )
+
+  const title=isDlp
+    ? '대외비 외부 전송 시도 감지'
+    : `${severity} 보안 이벤트 감지`
+
+  const targetLabel=incident
+    ? `보안 사고 상세 보기 · Incident #${incident.id||incident.incident_id}`
+    : `이벤트 상세 확인 · Event #${eventId}`
+
+  return (
+    <div className={`global-risk-alert ${severity.toLowerCase()}`}>
+      <div className="global-risk-alert-head">
+        <div>
+          <span className="global-risk-pulse"/>
+          <strong>{severity==='CRITICAL'?'긴급 보안 알림':'고위험 보안 알림'}</strong>
+        </div>
+        <span className="global-risk-time">
+          {fmt(event?.timestamp||event?.created_at)}
+        </span>
+      </div>
+
+      <div className="global-risk-title">{title}</div>
+
+      <div className="global-risk-summary">
+        <span>사용자 <b>{event?.user||'-'}</b></span>
+        <span>유형 <b>{koEvent(event?.event_type)}</b></span>
+        {event?.file_name&&(
+          <span>파일 <b>{event.file_name}</b></span>
+        )}
+        {event?.process_name&&(
+          <span>프로세스 <b>{event.process_name}</b></span>
+        )}
+        <span>
+          위험도 <b>{num(event?.risk_score).toFixed(2)} · {severity}</b>
+        </span>
+      </div>
+
+      <div className="global-risk-actions">
+        <button type="button" className="btn danger" onClick={onOpen}>
+          {targetLabel}
+        </button>
+        <button type="button" className="btn ghost" onClick={acknowledge}>
+          확인
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function CriticalAlert({incident,onOpen}){
   const signature=[incident?.id??incident?.incident_id??'',incident?.last_seen??incident?.updated_at??incident?.created_at??'',incident?.correlation_score??''].join('|')
   const storageKey='sentinel_acknowledged_critical_alerts'
@@ -2047,17 +2167,6 @@ function OverviewV2({events,users,summary,behaviorChanges,latestIncident,setPage
 
   return (
     <>
-      {latestIncident &&
-       String(
-         latestIncident.severity ||
-         latestIncident.risk_level
-       ).toUpperCase()==='CRITICAL' && (
-        <CriticalAlert
-          incident={latestIncident}
-          onOpen={()=>setPage('incidents')}
-        />
-      )}
-
       <div className="overview-v2">
 
         <section className="ov2-hero">
