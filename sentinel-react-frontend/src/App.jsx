@@ -845,6 +845,12 @@ function JsonNarrative({data}){
 
 function UserAnalysisPage({events,users,refresh}){
   const[form,setForm]=useState({username:'',display_name:'',department:'',role:''}),[msg,setMsg]=useState(''),[selected,setSelected]=useState(''),[profile,setProfile]=useState(null),[dyn,setDyn]=useState(null),[registerOpen,setRegisterOpen]=useState(false),[tableMode,setTableMode]=useState(false),[deleteConfirm,setDeleteConfirm]=useState({})
+  const[userSearch,setUserSearch]=useState('')
+  const[departmentFilter,setDepartmentFilter]=useState('ALL')
+  const[roleFilter,setRoleFilter]=useState('ALL')
+  const[statusFilter,setStatusFilter]=useState('ALL')
+  const[userPage,setUserPage]=useState(1)
+
   useEffect(()=>{if(!selected&&users[0])setSelected(users[0].username||users[0].user)},[users])
   useEffect(()=>{
     if(!selected)return
@@ -901,10 +907,156 @@ function UserAnalysisPage({events,users,refresh}){
       )/userEvents.length
     : 0
   const enabledCount=users.filter(u=>Boolean(u.monitoring_enabled??u.enabled??u.is_enabled)).length;const learningCount=users.filter(u=>String(u.learning_status||'').toUpperCase()==='LEARNING').length
+  const departmentPresets=[
+    'IT','개발','정보보안','인사','재무','영업',
+    '기획','운영','법무','연구개발','경영지원','기타'
+  ]
+  const rolePresets=[
+    'Backend Developer','Frontend Developer','Full-stack Developer',
+    'Security Analyst','SOC Analyst','System Administrator',
+    'Network Engineer','Data Analyst','Data Engineer',
+    'Product Manager','Project Manager','HR','Finance','Sales',
+    'Operations','Manager','Executive','기타'
+  ]
+
+  const departments=[...new Set([
+    ...departmentPresets,
+    ...users.map(u=>String(u.department||'').trim()).filter(Boolean)
+  ])].sort((a,b)=>a.localeCompare(b,'ko'))
+
+  const roles=[...new Set([
+    ...rolePresets,
+    ...users.map(u=>String(u.role||'').trim()).filter(Boolean)
+  ])].sort((a,b)=>a.localeCompare(b,'ko'))
+
+  const searchWord=userSearch.trim().toLowerCase()
+
+  const filteredUsers=users.filter(u=>{
+    const username=String(u.username||u.user||'')
+    const display=String(u.display_name||'')
+    const department=String(u.department||'')
+    const role=String(u.role||'')
+    const enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled)
+
+    const searchOk=!searchWord||[
+      username,display,department,role
+    ].some(v=>v.toLowerCase().includes(searchWord))
+
+    const departmentOk=
+      departmentFilter==='ALL'||department===departmentFilter
+    const roleOk=
+      roleFilter==='ALL'||role===roleFilter
+    const statusOk=
+      statusFilter==='ALL'||
+      (statusFilter==='ACTIVE'&&enabled)||
+      (statusFilter==='INACTIVE'&&!enabled)
+
+    return searchOk&&departmentOk&&roleOk&&statusOk
+  })
+
+  const USERS_PER_PAGE=10
+  const totalUserPages=Math.max(
+    1,
+    Math.ceil(filteredUsers.length/USERS_PER_PAGE)
+  )
+  const safeUserPage=Math.min(userPage,totalUserPages)
+  const pagedUsers=filteredUsers.slice(
+    (safeUserPage-1)*USERS_PER_PAGE,
+    safeUserPage*USERS_PER_PAGE
+  )
+
+  useEffect(()=>{
+    setUserPage(1)
+  },[
+    userSearch,
+    departmentFilter,
+    roleFilter,
+    statusFilter
+  ])
+
   return <><SectionHeader>모니터링 사용자 관리</SectionHeader><div className="kpis user-admin-kpis"><Kpi title="등록 사용자" value={users.length} hint="관리자가 등록한 모니터링 계정"/><Kpi title="활성 모니터링" value={enabledCount} hint="현재 이벤트 수집 허용 계정"/><Kpi title="기준선 학습 중" value={learningCount} hint="Adaptive Baseline LEARNING"/></div>
-    <button className="streamlit-expander-button" onClick={()=>setRegisterOpen(v=>!v)}>› &nbsp; ＋ 모니터링 사용자 등록</button>{registerOpen&&<form className="register-expander" onSubmit={create}><div className="register-grid"><Field label="사용자명 *"><input placeholder="예: 김재경" value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></Field><Field label="부서"><input placeholder="예: IT" value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></Field><Field label="표시 이름"><input placeholder="예: 김재경" value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})}/></Field><Field label="역할"><input placeholder="예: Developer" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}/></Field></div><button className="btn primary register-submit">모니터링 사용자 등록</button></form>}{msg&&<Notice>{msg}</Notice>}
-    <div className="section-caption">비활성화하면 새 /events 수집을 차단합니다. 삭제해도 기존 SecurityEvent 감사 이력은 보존됩니다.</div><div className="user-view-switch"><button className={`mini-btn ${!tableMode?'active-mini':''}`} onClick={()=>setTableMode(false)}>카드 보기</button><button className={`mini-btn ${tableMode?'active-mini':''}`} onClick={()=>setTableMode(true)}>표 보기</button></div>
-    {!tableMode?<div className="monitored-user-list">{users.map((u,i)=>{const name=u.username||u.user||'-',display=u.display_name||name,enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled),ls=String(u.learning_status||'LEARNING').toUpperCase();return <div className="monitored-user-row" key={name}><div className="baseline-summary user-admin-card"><div className="baseline-top"><div><div className="baseline-user">{display}</div><div className="baseline-meta">계정 {name} · {u.department||'-'} · {u.role||'-'} · 정상 학습 {num(u.learning_event_count).toLocaleString()}개 · 가중치 {num(u.confidence_weight,.25).toFixed(2)}</div></div><span className="baseline-badge">{ls} · {enabled?'활성':'비활성'}</span></div></div><div className="user-control-stack"><button className="btn primary user-action-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성화':'활성화'}</button><label className="delete-confirm-inline"><input type="checkbox" checked={Boolean(deleteConfirm[name])} onChange={e=>setDeleteConfirm(x=>({...x,[name]:e.target.checked}))}/> 삭제 확인</label><button className="btn ghost user-delete-btn" disabled={!deleteConfirm[name]} onClick={()=>remove(name)}>삭제</button></div></div>})}</div>:<SimpleTable headers={['사용자','표시 이름','부서','역할','모니터링','학습 상태','관리']} rows={users.map(u=>{const name=u.username||u.user||'-',enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled);return [name,u.display_name||'-',u.department||'-',u.role||'-',enabled?'활성':'비활성',u.learning_status||'-',<span key={name}><button className="mini-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성':'활성'}</button><button className="mini-btn danger-mini" onClick={()=>setDeleteConfirm(x=>({...x,[name]:true}))}>삭제</button></span>]})}/>} 
+    <button className="streamlit-expander-button" onClick={()=>setRegisterOpen(v=>!v)}>› &nbsp; ＋ 모니터링 사용자 등록</button>{registerOpen&&<form className="register-expander" onSubmit={create}><div className="register-grid"><Field label="사용자명 *"><input placeholder="예: 김재경" value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></Field><Field label="부서"><select value={form.department} onChange={e=>setForm({...form,department:e.target.value})}><option value="">부서 선택</option>{departmentPresets.map(x=><option key={x} value={x}>{x}</option>)}</select></Field><Field label="표시 이름"><input placeholder="예: 김재경" value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})}/></Field><Field label="직군"><select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="">직군 선택</option>{rolePresets.map(x=><option key={x} value={x}>{x}</option>)}</select></Field></div><button className="btn primary register-submit">모니터링 사용자 등록</button></form>}{msg&&<Notice>{msg}</Notice>}
+    <div className="section-caption">비활성화하면 새 /events 수집을 차단합니다. 삭제해도 기존 SecurityEvent 감사 이력은 보존됩니다.</div>
+    <div className="user-filter-panel">
+      <div className="user-filter-search">
+        <span>사용자 검색</span>
+        <input
+          value={userSearch}
+          onChange={e=>setUserSearch(e.target.value)}
+          placeholder="이름 · 계정 · 부서 · 직군 검색"
+        />
+      </div>
+
+      <label>
+        <span>부서</span>
+        <select
+          value={departmentFilter}
+          onChange={e=>setDepartmentFilter(e.target.value)}
+        >
+          <option value="ALL">전체 부서</option>
+          {departments.map(x=>
+            <option key={x} value={x}>{x}</option>
+          )}
+        </select>
+      </label>
+
+      <label>
+        <span>직군</span>
+        <select
+          value={roleFilter}
+          onChange={e=>setRoleFilter(e.target.value)}
+        >
+          <option value="ALL">전체 직군</option>
+          {roles.map(x=>
+            <option key={x} value={x}>{x}</option>
+          )}
+        </select>
+      </label>
+
+      <label>
+        <span>모니터링</span>
+        <select
+          value={statusFilter}
+          onChange={e=>setStatusFilter(e.target.value)}
+        >
+          <option value="ALL">전체 상태</option>
+          <option value="ACTIVE">활성</option>
+          <option value="INACTIVE">비활성</option>
+        </select>
+      </label>
+
+      <div className="user-filter-summary">
+        <span>검색 결과</span>
+        <strong>{filteredUsers.length.toLocaleString()}명</strong>
+        <small>전체 {users.length.toLocaleString()}명</small>
+      </div>
+    </div>
+<div className="user-view-switch"><button className={`mini-btn ${!tableMode?'active-mini':''}`} onClick={()=>setTableMode(false)}>카드 보기</button><button className={`mini-btn ${tableMode?'active-mini':''}`} onClick={()=>setTableMode(true)}>표 보기</button></div>
+    {!tableMode?<div className="monitored-user-list">{pagedUsers.map((u,i)=>{const name=u.username||u.user||'-',display=u.display_name||name,enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled),ls=String(u.learning_status||'LEARNING').toUpperCase();return <div className="monitored-user-row" key={name}><div className="baseline-summary user-admin-card"><div className="baseline-top"><div><div className="baseline-user">{display}</div><div className="baseline-meta">계정 {name} · {u.department||'-'} · {u.role||'-'} · 정상 학습 {num(u.learning_event_count).toLocaleString()}개 · 가중치 {num(u.confidence_weight,.25).toFixed(2)}</div></div><span className="baseline-badge">{ls} · {enabled?'활성':'비활성'}</span></div></div><div className="user-control-stack"><button className="btn primary user-action-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성화':'활성화'}</button><label className="delete-confirm-inline"><input type="checkbox" checked={Boolean(deleteConfirm[name])} onChange={e=>setDeleteConfirm(x=>({...x,[name]:e.target.checked}))}/> 삭제 확인</label><button className="btn ghost user-delete-btn" disabled={!deleteConfirm[name]} onClick={()=>remove(name)}>삭제</button></div></div>})}</div>:<SimpleTable headers={['사용자','표시 이름','부서','직군','모니터링','학습 상태','관리']} rows={pagedUsers.map(u=>{const name=u.username||u.user||'-',enabled=Boolean(u.monitoring_enabled??u.enabled??u.is_enabled);return [name,u.display_name||'-',u.department||'-',u.role||'-',enabled?'활성':'비활성',u.learning_status||'-',<span key={name}><button className="mini-btn" onClick={()=>toggle(name,!enabled)}>{enabled?'비활성':'활성'}</button><button className="mini-btn danger-mini" onClick={()=>setDeleteConfirm(x=>({...x,[name]:true}))}>삭제</button></span>]})}/>} 
+    <div className="user-pagination">
+      <button
+        className="mini-btn"
+        disabled={safeUserPage<=1}
+        onClick={()=>setUserPage(p=>Math.max(1,p-1))}
+      >
+        이전
+      </button>
+
+      <span>
+        {safeUserPage} / {totalUserPages} 페이지
+        {' · '}
+        {filteredUsers.length.toLocaleString()}명
+      </span>
+
+      <button
+        className="mini-btn"
+        disabled={safeUserPage>=totalUserPages}
+        onClick={()=>setUserPage(p=>Math.min(totalUserPages,p+1))}
+      >
+        다음
+      </button>
+    </div>
+
     <SectionHeader>Adaptive Personal UEBA</SectionHeader><Field label="분석할 모니터링 사용자를 선택하세요."><select value={selected} onChange={e=>setSelected(e.target.value)}>{users.map(u=><option key={u.username||u.user} value={u.username||u.user}>{u.display_name||u.username||u.user}</option>)}</select></Field>{selected&&<><div className="baseline-summary"><div className="baseline-top"><div><div className="baseline-user">{users.find(u=>String(u.username||u.user)===String(selected))?.display_name||selected}</div><div className="baseline-meta">계정 {selected} · {users.find(u=>String(u.username||u.user)===String(selected))?.department||'-'} · {users.find(u=>String(u.username||u.user)===String(selected))?.role||'-'} · 모니터링 활성</div></div><span className="baseline-badge">BASELINE {profile?.confidence_level||profile?.learning_status||'-'}</span></div></div><SectionHeader>개인 행동 기준선 학습 상태</SectionHeader><ProfileView profile={profile} eventCount={selectedUserEventTotal}/><SectionHeader>Dynamic User Risk</SectionHeader><DynamicRiskView data={dyn} events={userEvents}/><SectionHeader>개별 이벤트 위험 지표</SectionHeader><div className="kpis compact"><Kpi title="전체 이벤트" value={selectedUserEventTotal.toLocaleString()} hint="선택 사용자의 전체 DB 이벤트"/><Kpi title="평균 Risk" value={userAvg.toFixed(1)} hint="사용자 평균 위험점수"/><Kpi title="최고 Risk" value={userMax.toFixed(1)} hint="관찰된 최고 위험도"/><Kpi title="고위험 이벤트" value={userEvents.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length} hint="HIGH + CRITICAL"/></div><UserRiskAnalysis events={userEvents}/><SectionHeader>사용자 활동 이력</SectionHeader><EventTable events={userEvents.slice(0,100)} tall/></>}
     <SectionHeader>Peer Group UEBA · 동일 직무 비교</SectionHeader><div className="section-caption">선택 사용자를 같은 부서·같은 역할의 활성 모니터링 사용자들과 비교합니다. 개인 기준선과 Peer Group 기준선을 함께 사용해 개인에게는 익숙하지만 동일 직무 집단에서는 드문 행동도 확인합니다.</div><PeerGroupView profile={profile}/></>
 }
