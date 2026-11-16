@@ -208,7 +208,13 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
 
     response_level = _response_level(progress, confidence)
     recommended_control = None
-    if vector == 'USB_EXFILTRATION' and sensitive and usb and progress >= AUTO_PROGRESS_THRESHOLD and confidence >= AUTO_CONFIDENCE_THRESHOLD:
+    if (
+        vector in {'USB_EXFILTRATION', 'POTENTIAL_EXFILTRATION'}
+        and sensitive
+        and usb
+        and progress >= AUTO_PROGRESS_THRESHOLD
+        and confidence >= AUTO_CONFIDENCE_THRESHOLD
+    ):
         recommended_control = 'USB_WRITE_RESTRICT'
 
     if progress < 40 and recommended_control is None:
