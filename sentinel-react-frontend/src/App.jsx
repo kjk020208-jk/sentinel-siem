@@ -1117,6 +1117,7 @@ function SoarControlPage(){
   const SOAR_API='https://api.sentineljk.co.kr'
   const[rows,setRows]=useState([])
   const[predictions,setPredictions]=useState([])
+  const[liveGru,setLiveGru]=useState(null)
   const[err,setErr]=useState('')
   const[msg,setMsg]=useState('')
   const[busy,setBusy]=useState('')
@@ -1151,6 +1152,13 @@ function SoarControlPage(){
       setErr('')
     }catch(e){
       setErr(e.message)
+    }
+
+    try{
+      const gruData=await call('/next-action/predict/siem_demo?top_k=3')
+      setLiveGru(gruData?.available?gruData:null)
+    }catch(e){
+      setLiveGru(null)
     }
   }
 
@@ -1247,12 +1255,38 @@ function SoarControlPage(){
   const operationKo=v=>String(v||'').toUpperCase()==='RELEASE'?'해제':'적용'
   const evidenceProcesses=Array.isArray(evidence?.running_processes)?evidence.running_processes:[]
 
-  const latestGruPrediction=[...predictions]
+  const latestPersistedGruPrediction=[...predictions]
     .sort((a,b)=>num(b.id)-num(a.id))
     .find(p=>p?.gru_next_action?.available)||null
-  const latestGru=latestGruPrediction?.gru_next_action||{}
+
+  const latestThreatPrediction=[...predictions]
+    .sort((a,b)=>num(b.id)-num(a.id))[0]||null
+
+  const latestGru=liveGru?.available
+    ? liveGru
+    : (latestPersistedGruPrediction?.gru_next_action||{})
+
   const latestGruTop3=Array.isArray(latestGru?.predictions)?latestGru.predictions:[]
   const latestGruTop1=latestGruTop3[0]||null
+
+  const gruRiskActions=new Set([
+    'LOGIN_FAILURE','SENSITIVE_FILE_ACCESS','MASS_FILE_ACCESS',
+    'POWERSHELL','SCRIPT_EXECUTION','ARCHIVE_CREATE',
+    'USB_COPY','EXTERNAL_TRANSFER','WEB_UPLOAD','EMAIL_SEND'
+  ])
+
+  const liveGruRiskProbability=latestGruTop3.reduce((best,p)=>{
+    const action=String(p?.action||'').toUpperCase()
+    const probability=num(p?.probability)
+    return gruRiskActions.has(action)?Math.max(best,probability):best
+  },0)
+
+  const liveGruProgressBoost=
+    liveGruRiskProbability>=0.60?5:
+    liveGruRiskProbability>=0.35?3:
+    liveGruRiskProbability>=0.20?1:0
+
+  const latestGruPrediction=latestThreatPrediction
 
   return <>
     <SectionHeader>Predictive Threat Progression</SectionHeader>
@@ -1474,14 +1508,14 @@ function SoarControlPage(){
 
     <SectionHeader>GRU Next Action Prediction</SectionHeader>
     <div className="gru-next-action-panel">
-      {latestGruPrediction
+      {latestGru?.available
         ? <>
             <div className="gru-next-action-head">
               <div>
                 <div className="gru-next-eyebrow">LEARNED NEXT-ACTION SIGNAL</div>
                 <div className="gru-next-title">{latestGruTop1?.action||'예측 준비 중'}</div>
                 <div className="gru-next-sub">
-                  사용자 {latestGruPrediction.user||'-'} · 최근 행동 {latestGru.sequence_length_used??'-'}개 기반
+                  사용자 {latestGru.user||latestGruPrediction?.user||'-'} · 최근 행동 {latestGru.sequence_length_used??'-'}개 기반
                 </div>
               </div>
               <div className="gru-next-probability">
@@ -1493,23 +1527,23 @@ function SoarControlPage(){
             <div className="gru-next-metrics">
               <div className="gru-next-metric">
                 <span>Evidence Confidence</span>
-                <strong>{latestGruPrediction.prediction_confidence==null?'-':`${latestGruPrediction.prediction_confidence}%`}</strong>
+                <strong>{latestGruPrediction?.prediction_confidence==null?'-':`${latestGruPrediction.prediction_confidence}%`}</strong>
                 <small>현재 공격 진행 근거의 강도</small>
               </div>
               <div className="gru-next-metric">
                 <span>GRU Risk Probability</span>
-                <strong>{latestGruPrediction.gru_risk_probability==null?'-':`${(num(latestGruPrediction.gru_risk_probability)*100).toFixed(2)}%`}</strong>
+                <strong>{`${(liveGruRiskProbability*100).toFixed(2)}%`}</strong>
                 <small>Top-3 중 최대 위험행동 확률</small>
               </div>
               <div className="gru-next-metric">
                 <span>Threat Progress 기여</span>
-                <strong>{`+${num(latestGruPrediction.gru_progress_boost)}`}</strong>
+                <strong>{`+${liveGruProgressBoost}`}</strong>
                 <small>GRU 보조 신호 가산점</small>
               </div>
               <div className="gru-next-metric">
                 <span>Threat Progress</span>
-                <strong>{latestGruPrediction.threat_progress==null?'-':`${latestGruPrediction.threat_progress}%`}</strong>
-                <small>{latestGruPrediction.response_level||'-'}</small>
+                <strong>{latestGruPrediction?.threat_progress==null?'-':`${latestGruPrediction.threat_progress}%`}</strong>
+                <small>{latestGruPrediction?.response_level||'현재 저장된 Threat Progression 없음'}</small>
               </div>
             </div>
 
@@ -1534,7 +1568,7 @@ function SoarControlPage(){
             </div>
           </>
         : <div className="gru-next-empty">
-            GRU Next-Action 결과가 저장된 Prediction이 아직 없습니다. 새 이벤트가 들어오면 최신 예측이 자동 표시됩니다.
+            최근 행동이 3개 이상 쌓이면 GRU 실시간 다음 행동 예측이 자동 표시됩니다.
           </div>
       }
     </div>

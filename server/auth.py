@@ -161,11 +161,6 @@ def install_auth(app):
         if path.startswith("/auth/"):
             return await call_next(request)
 
-        # GRU next-action API: skip session-cookie auth here.
-        # main.py still enforces SENTINEL Basic admin authentication.
-        if path.startswith("/next-action/predict/") and method == "GET":
-            return await call_next(request)
-
         # Windows Agent 요청은 각 API에서 X-Agent-Token으로 검증
         agent_paths = (
             path == "/events"
