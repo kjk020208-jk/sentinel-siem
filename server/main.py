@@ -84,6 +84,13 @@ from server.response_control_engine import (
     request_release,
     decide_release_request,
 )
+from server.threat_prediction_engine import (
+    ThreatPrediction,
+    evaluate_threat_prediction,
+    list_threat_predictions,
+    latest_user_prediction,
+    decide_prediction,
+)
 from server.schema_migration import migrate_security_event_schema
 from server.change_verification_engine import (
     evaluate_behavior_change,
@@ -302,6 +309,11 @@ class ReleaseRequestCreate(BaseModel):
 
 
 class ReleaseDecision(BaseModel):
+    decision: str
+    admin_note: Optional[str] = None
+
+
+class ThreatPredictionDecision(BaseModel):
     decision: str
     admin_note: Optional[str] = None
 
@@ -908,6 +920,30 @@ def process_security_event(
         incident_error = str(error)
 
     incident_time = perf_counter() - step_start
+
+    # --------------------------------
+    # 15. Predictive Threat Progression
+    # --------------------------------
+    prediction_start = perf_counter()
+    try:
+        prediction_result = evaluate_threat_prediction(
+            db=db,
+            user=event.user,
+            reference_time=db_event.timestamp,
+            source_event_id=db_event.id,
+            risk_score=final_score,
+            sequence_score=sequence_score,
+            baseline_score=baseline_score,
+            peer_score=peer_score,
+            target_host=(getattr(event, 'host', None) or getattr(db_event, 'host', None)),
+        )
+        prediction_error = None
+    except Exception as error:
+        prediction_result = None
+        prediction_error = str(error)
+        print(f'[PREDICTION ERROR] user={event.user} event_id={db_event.id}: {error}')
+
+    prediction_time = perf_counter() - prediction_start
     total_time = perf_counter() - total_start
 
     if perf_logging:
@@ -986,6 +1022,8 @@ def process_security_event(
             )
         ),
         "sequence_score": sequence_score,
+        "threat_prediction": prediction_result,
+        "prediction_error": prediction_error,
         "risk_score": final_score,
         "risk_level": risk_level,
         "risk_explanation": risk_explanation,
@@ -4068,4 +4106,43 @@ def decide_response_control_release(
         "message": "해제 요청에 대한 관리자 결정이 반영되었습니다.",
         "request": result,
     }
+
+
+# ============================================================
+# Predictive Threat Progression API
+# ============================================================
+
+@app.get("/threat-predictions")
+def get_threat_predictions(
+    user: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    return list_threat_predictions(db, user=user, status=status, limit=limit)
+
+
+@app.get("/threat-predictions/{user}")
+def get_latest_threat_prediction(user: str, db: Session = Depends(get_db)):
+    result = latest_user_prediction(db, user=user)
+    if result is None:
+        raise HTTPException(status_code=404, detail="해당 사용자의 Prediction이 없습니다.")
+    return result
+
+
+@app.post("/threat-predictions/{prediction_id}/decision")
+def decide_threat_prediction(
+    prediction_id: int,
+    body: ThreatPredictionDecision,
+    db: Session = Depends(get_db),
+):
+    result, error = decide_prediction(
+        db,
+        prediction_id=prediction_id,
+        decision=body.decision,
+        admin_note=body.admin_note,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Prediction 관리자 결정이 반영되었습니다.", "prediction": result}
 
