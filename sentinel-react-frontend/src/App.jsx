@@ -1542,6 +1542,49 @@ function EndpointManagementPage(){
     }
   }
 
+  const deleteEndpoint=async(agentId,hostname)=>{
+    const target=hostname||agentId
+
+    if(!window.confirm(
+      `${target} Endpoint를 삭제하시겠습니까?`
+    )){
+      return
+    }
+
+    setBusy(agentId)
+    setMsg('')
+    setErr('')
+
+    try{
+      const response=await fetch(
+        `${API}/endpoints/${encodeURIComponent(agentId)}`,
+        {
+          method:'DELETE',
+          credentials:'include'
+        }
+      )
+
+      const data=await response.json().catch(()=>({}))
+
+      if(!response.ok){
+        throw new Error(
+          data.detail||
+          `Endpoint 삭제 실패 (${response.status})`
+        )
+      }
+
+      setMsg(
+        `${target} Endpoint 삭제 완료`
+      )
+
+      await load()
+    }catch(error){
+      setErr(error.message)
+    }finally{
+      setBusy('')
+    }
+  }
+
   const onlineCount=rows.filter(row=>row.status==='ONLINE').length
   const offlineCount=rows.filter(row=>row.status==='OFFLINE').length
   const pendingCount=rows.filter(row=>row.status==='PENDING').length
@@ -1585,6 +1628,7 @@ function EndpointManagementPage(){
             <th>Agent ID</th>
             <th>마지막 수신</th>
             <th>사용자 연결</th>
+            <th>관리</th>
           </tr>
         </thead>
 
@@ -1620,11 +1664,23 @@ function EndpointManagementPage(){
                     })}
                   </select>
                 </td>
+
+                <td>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={busy===row.agent_id}
+                    onClick={()=>deleteEndpoint(row.agent_id,row.hostname)}
+                    title="Endpoint 삭제"
+                  >
+                    삭제
+                  </button>
+                </td>
               </tr>
             ))
             : (
               <tr>
-                <td colSpan="9" className="empty-cell">
+                <td colSpan="10" className="empty-cell">
                   등록된 Endpoint가 없습니다. Agent를 실행하면 자동 등록됩니다.
                 </td>
               </tr>

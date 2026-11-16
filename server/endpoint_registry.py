@@ -201,3 +201,34 @@ def link_endpoint(
     db.refresh(row)
 
     return {"ok": True, "endpoint": _serialize(row)}
+
+@router.delete("/endpoints/{agent_id}")
+def delete_endpoint(
+    agent_id: str,
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(EndpointRegistry)
+        .filter(EndpointRegistry.agent_id == agent_id)
+        .first()
+    )
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Endpoint를 찾을 수 없습니다.",
+        )
+
+    hostname = row.hostname
+    linked_user = row.linked_user
+
+    db.delete(row)
+    db.commit()
+
+    return {
+        "ok": True,
+        "agent_id": agent_id,
+        "hostname": hostname,
+        "linked_user": linked_user,
+    }
+
