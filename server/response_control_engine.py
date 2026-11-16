@@ -175,7 +175,15 @@ def complete_action(
     return _serialize(row), None
 
 
-def request_release(db: Session, *, action_id: int, justification: str):
+def request_release(
+    db: Session,
+    *,
+    action_id: int,
+    justification: str,
+    active_window=None,
+    running_processes=None,
+    screenshot_path=None,
+):
     source = db.query(ResponseControlAction).filter(ResponseControlAction.id == action_id).first()
     if source is None:
         return None, "기존 제어 작업을 찾을 수 없습니다."
@@ -195,9 +203,11 @@ def request_release(db: Session, *, action_id: int, justification: str):
         prediction_confidence=source.prediction_confidence,
         requested_by="USER",
         user_justification=justification,
-        active_window=source.active_window,
-        running_processes_json=source.running_processes_json,
-        screenshot_path=source.screenshot_path,
+        active_window=active_window or source.active_window,
+        running_processes_json=json.dumps(
+            running_processes, ensure_ascii=False
+        ) if running_processes else source.running_processes_json,
+        screenshot_path=screenshot_path or source.screenshot_path,
     )
     db.add(row)
     db.commit()

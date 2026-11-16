@@ -169,6 +169,10 @@ def install_auth(app):
                 path.startswith("/response-controls/")
                 and path.endswith("/result")
             )
+            or (
+                path.startswith("/response-controls/")
+                and path.endswith("/user-release-request")
+            )
         )
 
         if method == "POST" and agent_paths:

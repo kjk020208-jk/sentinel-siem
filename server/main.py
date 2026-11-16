@@ -306,6 +306,9 @@ class ResponseControlResult(BaseModel):
 
 class ReleaseRequestCreate(BaseModel):
     justification: str
+    active_window: Optional[str] = None
+    running_processes: list = Field(default_factory=list)
+    screenshot_base64: Optional[str] = None
 
 
 class ReleaseDecision(BaseModel):
@@ -4085,6 +4088,56 @@ def create_response_control_release_request(
         raise HTTPException(status_code=400, detail=error)
 
     return {"message": "관리자에게 제어 해제를 요청했습니다.", "request": result}
+
+
+
+@app.post("/response-controls/{action_id}/user-release-request")
+def create_response_control_user_release_request(
+    action_id: int,
+    body: ReleaseRequestCreate,
+    db: Session = Depends(get_db),
+    x_agent_token: Optional[str] = Header(default=None, alias="X-Agent-Token"),
+):
+    if SENTINEL_AGENT_TOKEN:
+        if not x_agent_token or not secrets.compare_digest(
+            x_agent_token, SENTINEL_AGENT_TOKEN
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="유효하지 않은 SENTINEL Agent Token입니다.",
+            )
+
+    import base64
+    from pathlib import Path
+
+    screenshot_path = None
+    if body.screenshot_base64:
+        try:
+            raw = base64.b64decode(body.screenshot_base64, validate=True)
+            root = Path(__file__).resolve().parent.parent
+            evidence_dir = root / "evidence" / "screenshots"
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            target = evidence_dir / f"release_request_{action_id}.jpg"
+            target.write_bytes(raw)
+            screenshot_path = str(target.relative_to(root)).replace("\\", "/")
+        except Exception as exc:
+            screenshot_path = f"SCREENSHOT_SAVE_FAILED: {exc}"
+
+    result, error = request_release(
+        db,
+        action_id=action_id,
+        justification=body.justification,
+        active_window=body.active_window,
+        running_processes=body.running_processes,
+        screenshot_path=screenshot_path,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {
+        "message": "사용자 제어 해제 요청이 관리자에게 전달되었습니다.",
+        "request": result,
+    }
 
 
 @app.post("/response-controls/{request_id}/release-decision")
