@@ -265,8 +265,8 @@ function SectionHeader({children}){return <div className="section-header"><div c
 function Notice({type='info',children}){return <div className={`notice ${type}`}>{children}</div>}
 function Field({label,children}){return <label className="field"><span>{label}</span>{children}</label>}
 
-function Overview({
-  const[overviewAckEventId,setOverviewAckEventId]=useState('')events,users,summary,latestIncident,setPage,error,latency}){
+function Overview({events,users,summary,latestIncident,setPage,error,latency}){
+  const[overviewAckEventId,setOverviewAckEventId]=useState('')
   const levels=['LOW','MEDIUM','HIGH','CRITICAL'];const counts=levels.map(l=>[l,events.filter(e=>String(e.risk_level).toUpperCase()===l).length]);const anomaly=events.filter(e=>num(e.anomaly_score)>=50).length;const highCritical=events.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length;const critical=counts[3][1];const enabledUsers=users.filter(u=>u.monitoring_enabled===true||u.enabled===true||u.is_enabled===true).length||new Set(events.map(e=>e.user).filter(Boolean)).size;const avg=events.length?events.reduce((s,e)=>s+num(e.risk_score),0)/events.length:0;const latest=events[0]
   const topEvents=events.slice().sort((a,b)=>num(b.risk_score)-num(a.risk_score)).slice(0,5),um={};events.forEach(e=>{const u=e.user||'-',x=um[u]||=( {user:u,count:0,sum:0,max:0} );x.count++;x.sum+=num(e.risk_score);x.max=Math.max(x.max,num(e.risk_score))});const topUsers=Object.values(um).map(x=>({...x,avg:x.sum/x.count})).sort((a,b)=>b.max-a.max||b.avg-a.avg).slice(0,5)
   const tm={};events.forEach(e=>{const k=koEvent(e.event_type);tm[k]=(tm[k]||0)+1});let types=Object.entries(tm).sort((a,b)=>b[1]-a[1]);if(types.length>6){const o=types.slice(6).reduce((s,x)=>s+x[1],0);types=types.slice(0,6);if(o)types.push(['기타',o])}
