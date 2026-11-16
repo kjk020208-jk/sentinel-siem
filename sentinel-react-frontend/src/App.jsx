@@ -260,18 +260,63 @@ function Sidebar({page,setPage,autoRefresh,setAutoRefresh,refresh,collapsed}){
 }
 
 function TopBar(){return <header className="topbar"><div className="top-actions"><span className="deploy">Deploy</span><span className="system-online">● 시스템 정상</span></div></header>}
-function PageHeader({page}){const[t,s]=PAGE_META[page];const[now,setNow]=useState(new Date());useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id)},[]);return <div className="soc-header"><div><div className="soc-title">{t}</div><div className="soc-subtitle">{s}</div></div><div className="header-right"><div className="header-time">{fmt(now)}</div></div></div>}
+function PageHeader({page}){const[t,s]=PAGE_META[page];const[now,setNow]=useState(new Date());useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id)},[]);if(page==='overview')return null;return <div className="soc-header"><div><div className="soc-title">{t}</div><div className="soc-subtitle">{s}</div></div><div className="header-right"><div className="header-time">{fmt(now)}</div></div></div>}
 function SectionHeader({children}){return <div className="section-header"><div className="section-title">{children}</div><div className="section-line"/></div>}
 function Notice({type='info',children}){return <div className={`notice ${type}`}>{children}</div>}
 function Field({label,children}){return <label className="field"><span>{label}</span>{children}</label>}
 
-function Overview({events,users,summary,latestIncident,setPage,error,latency}){
+function Overview({
+  const[overviewAckEventId,setOverviewAckEventId]=useState('')events,users,summary,latestIncident,setPage,error,latency}){
   const levels=['LOW','MEDIUM','HIGH','CRITICAL'];const counts=levels.map(l=>[l,events.filter(e=>String(e.risk_level).toUpperCase()===l).length]);const anomaly=events.filter(e=>num(e.anomaly_score)>=50).length;const highCritical=events.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).length;const critical=counts[3][1];const enabledUsers=users.filter(u=>u.monitoring_enabled===true||u.enabled===true||u.is_enabled===true).length||new Set(events.map(e=>e.user).filter(Boolean)).size;const avg=events.length?events.reduce((s,e)=>s+num(e.risk_score),0)/events.length:0;const latest=events[0]
   const topEvents=events.slice().sort((a,b)=>num(b.risk_score)-num(a.risk_score)).slice(0,5),um={};events.forEach(e=>{const u=e.user||'-',x=um[u]||=( {user:u,count:0,sum:0,max:0} );x.count++;x.sum+=num(e.risk_score);x.max=Math.max(x.max,num(e.risk_score))});const topUsers=Object.values(um).map(x=>({...x,avg:x.sum/x.count})).sort((a,b)=>b.max-a.max||b.avg-a.avg).slice(0,5)
   const tm={};events.forEach(e=>{const k=koEvent(e.event_type);tm[k]=(tm[k]||0)+1});let types=Object.entries(tm).sort((a,b)=>b[1]-a[1]);if(types.length>6){const o=types.slice(6).reduce((s,x)=>s+x[1],0);types=types.slice(0,6);if(o)types.push(['기타',o])}
   const bc={OBSERVING:0,ACCEPTED:0,REJECTED:0},seen=new Set(),re=/행동 변화 검증:\s*([^/]+?)\s*\/\s*(OBSERVING|ACCEPTED|REJECTED)/g;events.forEach(e=>{let m;const t=String(e.reasons||'');while((m=re.exec(t))){const k=`${e.user}|${m[1].trim()}`;if(!seen.has(k)){seen.add(k);bc[m[2]]++}}re.lastIndex=0})
   const alerts=events.filter(e=>['HIGH','CRITICAL'].includes(String(e.risk_level).toUpperCase())).slice(0,20),recent60=events.filter(e=>{const t=new Date(e.timestamp||e.created_at).getTime();return Number.isFinite(t)&&Date.now()-t<=60000}).length
-  return <>{latestIncident&&String(latestIncident.severity||latestIncident.risk_level).toUpperCase()==='CRITICAL'&&<CriticalAlert incident={latestIncident} onOpen={()=>setPage('incidents')}/>}<div className="live-strip"><b>LIVE EVENT</b><span>· 최신 ID {latest?.id??'-'}</span><span>· 최근 수집 {fmt(latest?.timestamp||latest?.created_at)}</span><span>· 현재 조회 구간 CRITICAL {critical}건</span></div><div className="feed-label">LIVE INGEST FEED</div><div className="live-feed">{events.slice(0,3).map(e=><div className="feed-row" key={e.id}><span>#{e.id}</span><span>{timeOnly(e.timestamp||e.created_at)}</span><b>{e.user||'-'}</b><b>{koEvent(e.event_type)}</b><span>Risk {num(e.risk_score).toFixed(2)}</span><em className={riskClass(e.risk_level)}>{String(e.risk_level||'LOW').toUpperCase()}</em></div>)}</div>{error&&<Notice type="error">API 연결 오류: {error}</Notice>}
+  const latestRiskEventForAlert=events.find(e=>['HIGH','CRITICAL'].includes(String(e.risk_level||'').toUpperCase()))||null
+  const latestRiskAlertId=String(latestRiskEventForAlert?.id??latestRiskEventForAlert?.event_id??'')
+  useEffect(()=>{if(latestRiskAlertId)setOverviewAckEventId('')},[latestRiskAlertId])
+
+  return <>
+      {latestRiskEventForAlert&&latestRiskAlertId!==overviewAckEventId&&(
+        <div className="critical-alert overview-live-critical-alert">
+          <div className="live-alert-top">
+            <div className="live-alert-title">LIVE SECURITY ALERT</div>
+            <div className="live-alert-time">
+              {fmt(latestRiskEventForAlert.timestamp||latestRiskEventForAlert.created_at)}
+            </div>
+          </div>
+
+          <div className="live-alert-main">
+            {['web_upload','email_send','external_transfer'].includes(
+              String(latestRiskEventForAlert.event_type||'').toLowerCase()
+            )
+              ? '\uB300\uC678\uBE44 \uC678\uBD80 \uC804\uC1A1 \uC2DC\uB3C4 \uAC10\uC9C0'
+              : `${String(latestRiskEventForAlert.risk_level||'HIGH').toUpperCase()} \uBCF4\uC548 \uC774\uBCA4\uD2B8 \uAC10\uC9C0`}
+          </div>
+
+          <div className="live-alert-meta">
+            {'\uC0AC\uC6A9\uC790'} {latestRiskEventForAlert.user||'-'} ·
+            {' '}{koEvent(latestRiskEventForAlert.event_type)} ·
+            {' '}Risk {num(latestRiskEventForAlert.risk_score).toFixed(2)} ·
+            {' '}Event #{latestRiskEventForAlert.id||latestRiskEventForAlert.event_id}
+            {latestRiskEventForAlert.file_name&&<> · {'\uD30C\uC77C'} {latestRiskEventForAlert.file_name}</>}
+            {latestRiskEventForAlert.process_name&&<> · {'\uD504\uB85C\uC138\uC2A4'} {latestRiskEventForAlert.process_name}</>}
+          </div>
+
+          <div className="alert-actions">
+            <button className="btn danger" onClick={()=>setPage('events')}>
+              {'\uC774\uBCA4\uD2B8 \uC0C1\uC138 \uD655\uC778'}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={()=>setOverviewAckEventId(latestRiskAlertId)}
+            >
+              {'\uD655\uC778'}
+            </button>
+          </div>
+        </div>
+      )}
+{latestIncident&&String(latestIncident.severity||latestIncident.risk_level).toUpperCase()==='CRITICAL'&&<CriticalAlert incident={latestIncident} onOpen={()=>setPage('incidents')}/>}<div className="live-strip"><b>LIVE EVENT</b><span>· 최신 ID {latest?.id??'-'}</span><span>· 최근 수집 {fmt(latest?.timestamp||latest?.created_at)}</span><span>· 현재 조회 구간 CRITICAL {critical}건</span></div><div className="feed-label">LIVE INGEST FEED</div><div className="live-feed">{events.slice(0,3).map(e=><div className="feed-row" key={e.id}><span>#{e.id}</span><span>{timeOnly(e.timestamp||e.created_at)}</span><b>{e.user||'-'}</b><b>{koEvent(e.event_type)}</b><span>Risk {num(e.risk_score).toFixed(2)}</span><em className={riskClass(e.risk_level)}>{String(e.risk_level||'LOW').toUpperCase()}</em></div>)}</div>{error&&<Notice type="error">API 연결 오류: {error}</Notice>}
     <SectionHeader>보안 현황</SectionHeader><div className="section-caption">최근 수집된 보안 이벤트를 기준으로 현재 위험 상태와 우선 확인이 필요한 항목을 요약합니다.</div><div className="kpis"><Kpi title="전체 이벤트" value={events.length} hint="수집된 전체 보안 이벤트"/><Kpi title="이상행동 탐지" value={anomaly} hint="Isolation Forest Score ≥ 50"/><Kpi title="고위험 이벤트" value={highCritical} hint="HIGH + CRITICAL" warning/><Kpi title="긴급 이벤트" value={critical} hint="즉시 확인이 필요한 이벤트" danger/><Kpi title="모니터링 사용자" value={enabledUsers} hint="관찰된 사용자 계정"/></div>
     <SectionHeader>한눈에 보는 보안 상태</SectionHeader><div className="visual-grid"><Panel title="위험 등급 분포"><RiskDonut counts={counts}/></Panel><Panel title="이벤트 유형 분포"><EventTypeDonut items={types}/></Panel><Panel title="최근 이벤트 평균 위험도" subtitle={`현재 상태: ${avg>=80?'심각':avg>=65?'높음':avg>=30?'주의':'낮음'}`}><Gauge value={avg}/></Panel></div><div className="chart-note">※ 현재 화면의 시각화는 최근 로딩된 이벤트를 기준으로 계산됩니다.</div>
     <SectionHeader>즉시 확인 필요</SectionHeader><div className="priority-grid"><div><div className="subheading">위험도 상위 이벤트 5건</div><TopEventTable events={topEvents}/></div><div><div className="subheading">현재 위험 사용자 TOP 5</div><TopUserTable users={topUsers}/></div></div>
