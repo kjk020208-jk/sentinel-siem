@@ -242,7 +242,12 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     db.add(row); db.commit(); db.refresh(row)
 
     control_action = None
-    if AUTO_MICRO_CONTROL_ENABLED and recommended_control == 'USB_WRITE_RESTRICT' and not _usb_control_active_or_pending(db, target_host):
+    if (
+        AUTO_MICRO_CONTROL_ENABLED
+        and recommended_control == 'USB_WRITE_RESTRICT'
+        and bool(str(target_host or '').strip())
+        and not _usb_control_active_or_pending(db, target_host)
+    ):
         control_action, error = create_control_action(
             db,
             user=user,
@@ -303,6 +308,11 @@ def decide_prediction(db, *, prediction_id, decision, admin_note=None):
         row.status = 'APPROVED'; row.decision_note = admin_note or '승인됨 - 실행 가능한 실제 제어 없음'
         db.commit(); db.refresh(row)
         return _serialize(row), None
+
+    if not str(row.target_host or '').strip():
+        return None, (
+            '대상 Host가 없는 Prediction에는 실제 엔드포인트 제어를 실행할 수 없습니다.'
+        )
 
     if _usb_control_active_or_pending(db, row.target_host):
         row.status = 'APPROVED'; row.decision_note = '동일 Host의 USB 제어가 이미 적용 또는 대기 중'
