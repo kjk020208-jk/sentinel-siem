@@ -7590,3 +7590,20 @@ textarea:focus{
   }
 }
 
+
+/* SENTINEL real-time event -> explainable risk interaction */
+.event-select-table tbody tr{
+  cursor:pointer;
+  transition:background .14s ease, box-shadow .14s ease;
+}
+.event-select-table tbody tr:hover{
+  background:rgba(59,130,246,.08);
+}
+.event-select-table tbody tr.selected-event-row{
+  background:rgba(37,99,235,.12);
+  box-shadow:inset 3px 0 0 rgba(59,130,246,.85);
+}
+.event-select-table tbody tr.selected-event-row td{
+  color:#e8eef7;
+}
+

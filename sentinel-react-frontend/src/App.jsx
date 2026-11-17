@@ -666,7 +666,46 @@ function Gauge({value}){
 function TopEventTable({events,onSelect}){return <div className="table-wrap short clickable-table"><table><thead><tr><th>발생 시간</th><th>사용자</th><th>이벤트</th><th>위험도</th><th>등급</th></tr></thead><tbody>{events.length?events.map(e=><tr key={e.id??e.event_id} onClick={()=>onSelect?.(e)}><td>{fmt(e.timestamp||e.created_at)}</td><td><b>{e.user||'-'}</b></td><td>{koEvent(e.event_type)}</td><td>{num(e.risk_score).toFixed(2)}</td><td><span className={`risk-pill ${riskClass(e.risk_level)}`}>{String(e.risk_level||'LOW').toUpperCase()}</span></td></tr>):<tr><td colSpan="5" className="empty-cell">표시할 데이터가 없습니다.</td></tr>}</tbody></table></div>}
 function TopUserTable({users,onSelect}){return <div className="table-wrap short clickable-table"><table><thead><tr><th>사용자</th><th>현재 위험도</th><th>최근 핵심 행위</th><th>이벤트</th></tr></thead><tbody>{users.length?users.map(u=><tr key={u.user} onClick={()=>onSelect?.(u)}><td><b>{u.user}</b></td><td><span className={`risk-pill ${riskClass(u.level)}`}>{u.max.toFixed(2)} · {u.level}</span></td><td>{u.latestEvent?koEvent(u.latestEvent.event_type):'-'}{u.latestEvent?.process_name?` · ${u.latestEvent.process_name}`:''}</td><td>{u.count}</td></tr>):<tr><td colSpan="4" className="empty-cell">표시할 데이터가 없습니다.</td></tr>}</tbody></table></div>}
 function AlertTable({events}){return <SimpleTable headers={['탐지 시간','위험 등급','Risk Score','사용자','이벤트 유형','Source IP','파일','프로세스']} rows={events.map(e=>[fmt(e.timestamp||e.created_at),e.risk_level||'-',num(e.risk_score).toFixed(2),e.user||'-',koEvent(e.event_type),e.source_ip||'-',e.file_name||e.file_path||'-',e.process_name||'-'])}/>} 
-function EventTable({events,tall=false}){return <SimpleTable tall={tall} headers={['이벤트 ID','발생 시간','사용자','이벤트 유형','Source IP','로그인 실패','파일','파일 등급','파일 접근','USB','프로세스','Anomaly Score','Risk Score','위험 등급']} rows={events.map(e=>[e.id,fmt(e.timestamp||e.created_at),e.user||'-',koEvent(e.event_type),e.source_ip||'-',e.login_fail_count??'-',e.file_name||e.file_path||'-',e.file_grade||'-',e.file_access_count??'-',e.usb_connected??'-',e.process_name||'-',num(e.anomaly_score).toFixed(2),num(e.risk_score).toFixed(2),e.risk_level||'-'])}/>} 
+function EventTable({events,tall=false,onSelect,selectedId}) {
+  const headers=['이벤트 ID','발생 시간','사용자','이벤트 유형','Source IP','로그인 실패','파일','파일 등급','파일 접근','USB','프로세스','Anomaly Score','Risk Score','위험 등급']
+  return <div className={`table-wrap ${tall?'tall':''} ${onSelect?'event-select-table':''}`}>
+    <table>
+      <thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead>
+      <tbody>
+        {events.length
+          ? events.map(e=>{
+              const id=String(e.id??e.event_id??'')
+              const selected=String(selectedId||'')===id
+              const cells=[
+                e.id??e.event_id,
+                fmt(e.timestamp||e.created_at),
+                e.user||'-',
+                koEvent(e.event_type),
+                e.source_ip||'-',
+                e.login_fail_count??'-',
+                e.file_name||e.file_path||'-',
+                e.file_grade||'-',
+                e.file_access_count??'-',
+                e.usb_connected??'-',
+                e.process_name||'-',
+                num(e.anomaly_score).toFixed(2),
+                num(e.risk_score).toFixed(2),
+                e.risk_level||'-'
+              ]
+              return <tr
+                key={id||`${e.user}-${e.timestamp}`}
+                className={selected?'selected-event-row':''}
+                onClick={()=>onSelect?.(e)}
+                title={onSelect?'클릭하면 이 이벤트의 위험도 근거를 바로 분석합니다.':undefined}
+              >
+                {cells.map((c,j)=><td key={j}>{c}</td>)}
+              </tr>
+            })
+          : <tr><td colSpan={headers.length} className="empty-cell">표시할 데이터가 없습니다.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+}
 function SimpleTable({headers,rows,short=false,tall=false}){return <div className={`table-wrap ${short?'short':''} ${tall?'tall':''}`}><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i}>{r.map((c,j)=><td key={j}>{c}</td>)}</tr>):<tr><td colSpan={headers.length} className="empty-cell">표시할 데이터가 없습니다.</td></tr>}</tbody></table></div>}
 
 
@@ -829,6 +868,23 @@ function EventsPage({events,monitoredUsers=[],summary}){
   const behaviorEvents=filtered.filter(e=>String(e.reasons||'').includes('행동 변화 검증:')),explainables=filtered.filter(e=>e.id!=null)
   useEffect(()=>{if(!selectedBehavior&&behaviorEvents[0])setSelectedBehavior(String(behaviorEvents[0].id));if(!selectedExplain&&explainables[0])setSelectedExplain(String(explainables[0].id))},[filtered.length])
   const bEvent=behaviorEvents.find(e=>String(e.id)===String(selectedBehavior));const behaviorItems=[];String(bEvent?.reasons||'').split(',').forEach(reason=>{reason=reason.trim();if(!reason.startsWith('행동 변화 검증:'))return;const p=reason.replace('행동 변화 검증:','').trim().split(' / ');behaviorItems.push({target:p[0],status:String(p[1]||'OBSERVING').toUpperCase(),reason:p.slice(2).join(' / ')||'-'})})
+
+  const selectEventForExplain=async(event)=>{
+    const id=String(event?.id??event?.event_id??'')
+    if(!id)return
+    setSelectedExplain(id)
+    setExplanation(null)
+    setEventAI(null)
+    setEventAiError('')
+    setExErr('')
+    try{
+      const result=await api.riskExplanation(id)
+      setExplanation(result)
+    }catch(e){
+      setExErr(e?.message||'위험도 근거 조회에 실패했습니다.')
+    }
+  }
+
   const loadExplain=async()=>{setExErr('');setExplanation(null);try{setExplanation(await api.riskExplanation(selectedExplain))}catch(e){setExErr(e.message)}}
   const runAI=async()=>{
     setAiBusy(true)
@@ -845,9 +901,27 @@ function EventsPage({events,monitoredUsers=[],summary}){
   }
   return <><SectionHeader>이벤트 필터</SectionHeader><div className="filter-grid"><Field label="위험 등급"><select value={level} onChange={e=>setLevel(e.target.value)}>{levels.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="사용자"><select value={user} onChange={e=>setUser(e.target.value)}>{users.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="이벤트 유형"><select value={type} onChange={e=>setType(e.target.value)}>{types.map(x=><option key={x}>{x}</option>)}</select></Field></div><Field label="검색"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="사용자, IP, 파일명, 프로세스명 검색"/></Field>
     <SectionHeader>모니터링 현황</SectionHeader><div className="kpis compact"><Kpi title="조회 이벤트" value={visibleEventCount.toLocaleString()} hint={hasEventFilter?'현재 로딩 구간의 필터 결과':'전체 모니터링 이벤트'}/><Kpi title="CRITICAL" value={visibleCritical.toLocaleString()} hint="긴급 위험 이벤트" danger/><Kpi title="HIGH" value={visibleHigh.toLocaleString()} hint="고위험 이벤트" warning/><Kpi title="사용자" value={visibleUsers.toLocaleString()} hint={hasEventFilter?'현재 필터 결과 사용자':'활성 모니터링 사용자'}/></div>
-    <SectionHeader>보안 이벤트 로그</SectionHeader><EventTable events={filtered} tall/>
-    <SectionHeader>행동 변화 검증</SectionHeader><div className="section-caption">새로운 IP·프로세스·장치를 즉시 정상으로 학습하지 않고 관찰 후 ACCEPTED 또는 REJECTED 상태로 판정합니다.</div>{behaviorEvents.length?<><Field label="행동 변화 검증 이벤트"><select value={selectedBehavior} onChange={e=>setSelectedBehavior(e.target.value)}>{behaviorEvents.map(e=><option value={e.id} key={e.id}>#{e.id} · {e.user} · {koEvent(e.event_type)} · {e.risk_level}</option>)}</select></Field><div className="st-metric-grid cols3"><StMetric label="관찰 중" value={behaviorItems.filter(x=>x.status==='OBSERVING').length}/><StMetric label="정상 승인" value={behaviorItems.filter(x=>x.status==='ACCEPTED').length}/><StMetric label="학습 제외" value={behaviorItems.filter(x=>x.status==='REJECTED').length}/></div><div className="behavior-cards">{behaviorItems.map((x,i)=><Notice key={i} type={x.status==='REJECTED'?'error':x.status==='ACCEPTED'?'success':'warning'}><b>{x.status} · {x.target}</b><br/>{x.reason}</Notice>)}</div></>:<Notice>현재 표시 중인 이벤트에는 행동 변화 검증 결과가 없습니다.</Notice>}
-    <SectionHeader>Explainable Risk Score</SectionHeader><div className="section-caption">선택한 이벤트의 Rule / Baseline / ML / Sequence / Peer / Adaptive 점수와 위험도 보정 근거를 확인합니다.</div><div className="action-row"><select className="select grow" value={selectedExplain} onChange={e=>{setSelectedExplain(e.target.value);setExplanation(null);setEventAI(null)}}>{explainables.map(e=><option value={e.id} key={e.id}>#{e.id} · {e.user} · {koEvent(e.event_type)} · Risk {num(e.risk_score).toFixed(2)}</option>)}</select><button className="btn primary" onClick={loadExplain}>위험도 근거 조회</button><button type="button" className="btn primary" disabled={aiBusy} onClick={runAI}>{aiBusy?'AI 분석 중...':'개별 이벤트 AI 분석'}</button></div>{exErr&&<Notice type="error">{exErr}</Notice>}{explanation&&<RiskExplanation data={explanation}/>} {eventAiError&&<Notice type="error">AI 보안 분석 실패 · {eventAiError}</Notice>}{eventAI&&<EventAIReport response={eventAI}/>}
+    <SectionHeader>보안 이벤트 로그</SectionHeader>
+    <div className="section-caption">이벤트 행을 클릭하면 아래 Explainable Risk Score가 해당 이벤트 기준으로 즉시 갱신됩니다.</div>
+    <EventTable events={filtered} tall onSelect={selectEventForExplain} selectedId={selectedExplain}/>
+
+    <SectionHeader>Explainable Risk Score</SectionHeader>
+    <div className="section-caption">선택한 이벤트의 Rule / Baseline / ML / Sequence / Peer / Adaptive 점수와 위험도 보정 근거를 확인합니다.</div>
+    <div className="action-row">
+      <select className="select grow" value={selectedExplain} onChange={e=>{setSelectedExplain(e.target.value);setExplanation(null);setEventAI(null)}}>
+        {explainables.map(e=><option value={e.id} key={e.id}>#{e.id} · {e.user} · {koEvent(e.event_type)} · Risk {num(e.risk_score).toFixed(2)}</option>)}
+      </select>
+      <button className="btn primary" onClick={loadExplain}>위험도 근거 조회</button>
+      <button type="button" className="btn primary" disabled={aiBusy} onClick={runAI}>{aiBusy?'AI 분석 중...':'개별 이벤트 AI 분석'}</button>
+    </div>
+    {exErr&&<Notice type="error">{exErr}</Notice>}
+    {explanation&&<RiskExplanation data={explanation}/>}
+    {eventAiError&&<Notice type="error">AI 보안 분석 실패 · {eventAiError}</Notice>}
+    {eventAI&&<EventAIReport response={eventAI}/>}
+
+    <SectionHeader>행동 변화 검증</SectionHeader>
+    <div className="section-caption">새로운 IP·프로세스·장치를 즉시 정상으로 학습하지 않고 관찰 후 ACCEPTED 또는 REJECTED 상태로 판정합니다.</div>
+    {behaviorEvents.length?<><Field label="행동 변화 검증 이벤트"><select value={selectedBehavior} onChange={e=>setSelectedBehavior(e.target.value)}>{behaviorEvents.map(e=><option value={e.id} key={e.id}>#{e.id} · {e.user} · {koEvent(e.event_type)} · {e.risk_level}</option>)}</select></Field><div className="st-metric-grid cols3"><StMetric label="관찰 중" value={behaviorItems.filter(x=>x.status==='OBSERVING').length}/><StMetric label="정상 승인" value={behaviorItems.filter(x=>x.status==='ACCEPTED').length}/><StMetric label="학습 제외" value={behaviorItems.filter(x=>x.status==='REJECTED').length}/></div><div className="behavior-cards">{behaviorItems.map((x,i)=><Notice key={i} type={x.status==='REJECTED'?'error':x.status==='ACCEPTED'?'success':'warning'}><b>{x.status} · {x.target}</b><br/>{x.reason}</Notice>)}</div></>:<Notice>현재 표시 중인 이벤트에는 행동 변화 검증 결과가 없습니다.</Notice>}
   </>
 }
 function RiskExplanation({data}){
