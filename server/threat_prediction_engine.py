@@ -155,17 +155,40 @@ def _response_level(progress, confidence):
     return 'SELECTIVE_PREVENT' if confidence >= AUTO_CONFIDENCE_THRESHOLD else 'PREPARE_CONTROL'
 
 
-def _usb_control_active_or_pending(db, target_host):
-    q = db.query(ResponseControlAction).filter(ResponseControlAction.action_type == 'USB_WRITE_RESTRICT')
+def _control_active_or_pending(db, target_host, action_type):
+    q = db.query(ResponseControlAction).filter(
+        ResponseControlAction.action_type == str(action_type or '').upper().strip()
+    )
     if target_host:
         q = q.filter(ResponseControlAction.target_host == target_host)
+
     rows = q.order_by(ResponseControlAction.id.desc()).limit(30).all()
-    if any(r.operation == 'APPLY' and r.status in {'QUEUED','CLAIMED'} for r in rows):
+
+    if any(
+        r.operation == 'APPLY'
+        and r.status in {'QUEUED', 'CLAIMED'}
+        for r in rows
+    ):
         return True
-    completed = [r for r in rows if r.status == 'COMPLETED' and r.operation in {'APPLY','RELEASE'}]
+
+    completed = [
+        r for r in rows
+        if r.status == 'COMPLETED'
+        and r.operation in {'APPLY', 'RELEASE'}
+    ]
+
     if not completed:
         return False
+
     return max(completed, key=lambda r: r.id).operation == 'APPLY'
+
+
+def _usb_control_active_or_pending(db, target_host):
+    return _control_active_or_pending(
+        db,
+        target_host,
+        'USB_WRITE_RESTRICT',
+    )
 
 
 def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None, risk_score=0, sequence_score=0, baseline_score=0, peer_score=0, target_host=None):
@@ -359,18 +382,33 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     db.add(row); db.commit(); db.refresh(row)
 
     control_action = None
+    auto_control_types = {
+        'USB_WRITE_RESTRICT',
+        'NETWORK_RESTRICT',
+    }
+
     if (
         AUTO_MICRO_CONTROL_ENABLED
-        and recommended_control == 'USB_WRITE_RESTRICT'
+        and recommended_control in auto_control_types
         and bool(str(target_host or '').strip())
-        and not _usb_control_active_or_pending(db, target_host)
+        and not _control_active_or_pending(
+            db,
+            target_host,
+            recommended_control,
+        )
     ):
         control_action, error = create_control_action(
             db,
             user=user,
-            action_type='USB_WRITE_RESTRICT',
+            action_type=recommended_control,
             operation='APPLY',
-            reason=f'Predictive Threat Progression 자동 Micro-Control · stage={stage}, progress={progress}, confidence={confidence}',
+            reason=(
+                'Predictive Threat Progression 자동 제어'
+                f' · control={recommended_control}'
+                f' · stage={stage}'
+                f' · progress={progress}'
+                f' · confidence={confidence}'
+            ),
             target_host=target_host,
             risk_score=int(round(float(risk_score or 0))),
             threat_progress=progress,
@@ -378,15 +416,21 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
             prediction_confidence=confidence,
             requested_by='PREDICTIVE_ENGINE',
         )
+
         if error is None and control_action:
             row.status = 'CONTROL_QUEUED'
             row.control_action_id = control_action['id']
-            row.decision_note = '조건부 자동 Micro-Control 실행'
-            db.commit(); db.refresh(row)
+            row.decision_note = (
+                f'조건부 자동 제어 실행 · {recommended_control}'
+            )
+            db.commit()
+            db.refresh(row)
+
         elif error:
             row.status = 'CONTROL_FAILED'
             row.decision_note = error
-            db.commit(); db.refresh(row)
+            db.commit()
+            db.refresh(row)
 
     return {
         **_serialize(row),
@@ -428,9 +472,16 @@ def decide_prediction(db, *, prediction_id, decision, admin_note=None):
     if decision != 'APPROVE':
         return None, 'decision은 APPROVE 또는 REJECT여야 합니다.'
 
-    if row.recommended_control != 'USB_WRITE_RESTRICT':
-        row.status = 'APPROVED'; row.decision_note = admin_note or '승인됨 - 실행 가능한 실제 제어 없음'
-        db.commit(); db.refresh(row)
+    executable_controls = {
+        'USB_WRITE_RESTRICT',
+        'NETWORK_RESTRICT',
+    }
+
+    if row.recommended_control not in executable_controls:
+        row.status = 'APPROVED'
+        row.decision_note = admin_note or '승인됨 - 실행 가능한 실제 제어 없음'
+        db.commit()
+        db.refresh(row)
         return _serialize(row), None
 
     if not str(row.target_host or '').strip():
@@ -438,17 +489,29 @@ def decide_prediction(db, *, prediction_id, decision, admin_note=None):
             '대상 Host가 없는 Prediction에는 실제 엔드포인트 제어를 실행할 수 없습니다.'
         )
 
-    if _usb_control_active_or_pending(db, row.target_host):
-        row.status = 'APPROVED'; row.decision_note = '동일 Host의 USB 제어가 이미 적용 또는 대기 중'
-        db.commit(); db.refresh(row)
+    if _control_active_or_pending(
+        db,
+        row.target_host,
+        row.recommended_control,
+    ):
+        row.status = 'APPROVED'
+        row.decision_note = (
+            f'동일 Host의 {row.recommended_control} 제어가 이미 적용 또는 대기 중'
+        )
+        db.commit()
+        db.refresh(row)
         return _serialize(row), None
 
     action, error = create_control_action(
         db,
         user=row.user,
-        action_type='USB_WRITE_RESTRICT',
+        action_type=row.recommended_control,
         operation='APPLY',
-        reason=f'Predictive Threat Progression 관리자 승인 · Prediction #{row.id}',
+        reason=(
+            'Predictive Threat Progression 관리자 승인'
+            f' · Prediction #{row.id}'
+            f' · control={row.recommended_control}'
+        ),
         target_host=row.target_host,
         risk_score=int(round(float(row.source_risk_score or 0))),
         threat_progress=row.threat_progress,
