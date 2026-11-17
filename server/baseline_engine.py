@@ -117,7 +117,10 @@ def _get_learning_events(
             (
                 event.timestamp >= learning_since
                 or getattr(event, "source", None)
-                == "presentation_baseline"
+                in {
+                    "presentation_baseline",
+                    "baseline_seed_real_users_remote_v1",
+                }
             )
             and is_event_allowed_for_baseline(
                 db,
