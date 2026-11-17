@@ -463,6 +463,66 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
                 f'(최대 위험행동 확률 {gru_risk_probability * 100.0:.1f}%)'
             )
 
+    # ------------------------------------------------------------
+    # Personalized control evidence
+    # ------------------------------------------------------------
+    # Hard Evidence Override:
+    # 반복 로그인 실패 -> 로그인 성공 -> 민감문서 -> USB/의심 프로세스
+    # 처럼 독립적인 강한 공격 증거가 연속되면 개인 기준선이 정상이어도
+    # 자동 제어를 허용한다.
+    hard_credential_exfiltration = bool(
+        failure_count >= 3
+        and failures
+        and successes
+        and sensitive
+        and (usb or procs)
+    )
+
+    # Direct Exfiltration:
+    # 로그인 이상이 없어도 민감문서 접근 뒤 PowerShell/curl 등
+    # 의심 프로세스가 이어지면 강한 직접 유출 정황으로 본다.
+    hard_direct_exfiltration = bool(
+        sensitive
+        and procs
+        and float(sequence_score or 0) >= 60
+    )
+
+    hard_evidence_override = bool(
+        hard_credential_exfiltration
+        or hard_direct_exfiltration
+    )
+
+    # Ambiguous Context Gate:
+    # 민감문서 + USB만으로는 평소 업무일 수 있으므로
+    # 개인/동료 기준선 이탈 또는 높은 Event Risk 같은 추가 정황이
+    # 있어야 자동 차단한다.
+    baseline_deviation = float(baseline_score or 0)
+    peer_deviation = float(peer_score or 0)
+    event_risk = float(risk_score or 0)
+
+    contextual_deviation = bool(
+        baseline_deviation >= 10
+        or peer_deviation >= 20
+        or event_risk >= 60
+    )
+
+    if hard_credential_exfiltration:
+        evidence.append(
+            'Hard Evidence Override · 반복 로그인 실패 후 성공 + 민감문서 + 반출 정황'
+        )
+    elif hard_direct_exfiltration:
+        evidence.append(
+            'Hard Evidence Override · 민감문서 이후 직접 유출 가능 프로세스'
+        )
+    elif sensitive and usb and contextual_deviation:
+        evidence.append(
+            '개인화 자동제어 조건 충족 · 민감문서 + USB + 기준선/위험도 이탈'
+        )
+    elif sensitive and usb:
+        evidence.append(
+            '민감문서 + USB 감지 · 개인 정상업무 가능성 때문에 추가 관찰'
+        )
+
     confidence = 20
     confidence += 12 if failure_count >= 3 else (5 if failure_count else 0)
     confidence += 12 if failures and successes else 0
@@ -470,27 +530,52 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     confidence += 25 if usb else 0
     confidence += 8 if procs else 0
     confidence += 8 if float(sequence_score or 0) >= 60 else (4 if float(sequence_score or 0) >= 40 else 0)
-    confidence += 4 if float(baseline_score or 0) >= 30 else 0
-    confidence += 4 if float(peer_score or 0) >= 40 else 0
+    confidence += 6 if baseline_deviation >= 10 else 0
+    confidence += 6 if peer_deviation >= 20 else 0
+    confidence += 8 if event_risk >= 60 else 0
+    confidence += 10 if hard_evidence_override else 0
     confidence = max(0, min(99, int(confidence)))
 
     response_level = _response_level(progress, confidence)
     recommended_control = None
-    if (
+
+    usb_auto_gate = bool(
         vector in {'USB_EXFILTRATION', 'POTENTIAL_EXFILTRATION'}
         and sensitive
         and usb
         and progress >= AUTO_PROGRESS_THRESHOLD
         and confidence >= AUTO_CONFIDENCE_THRESHOLD
-    ):
+        and (
+            hard_evidence_override
+            or contextual_deviation
+        )
+    )
+
+    if usb_auto_gate:
         recommended_control = 'USB_WRITE_RESTRICT'
-        # Progressive Escalation
-        if (
+
+        # Progressive Escalation:
+        # 강한 직접 유출 정황 또는 매우 높은 진행도/신뢰도에서
+        # NETWORK_RESTRICT로 승격한다.
+        network_auto_gate = bool(
             vector in {'USB_EXFILTRATION', 'POTENTIAL_EXFILTRATION'}
             and sensitive
-            and progress >= NETWORK_RESTRICT_PROGRESS_THRESHOLD
-            and confidence >= NETWORK_RESTRICT_CONFIDENCE_THRESHOLD
-        ):
+            and procs
+            and (
+                hard_evidence_override
+                or contextual_deviation
+            )
+            and (
+                (
+                    progress >= NETWORK_RESTRICT_PROGRESS_THRESHOLD
+                    and confidence >= NETWORK_RESTRICT_CONFIDENCE_THRESHOLD
+                )
+                or hard_credential_exfiltration
+                or hard_direct_exfiltration
+            )
+        )
+
+        if network_auto_gate:
             recommended_control = 'NETWORK_RESTRICT'
 
     if progress < 40 and recommended_control is None:
