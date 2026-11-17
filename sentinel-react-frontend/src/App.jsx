@@ -3039,34 +3039,6 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
         <section className="ov2-block">
           <div className="ov2-section-head">
             <div>
-              <span>LIVE ACTIVITY</span>
-              <h3>최근 보안 활동</h3>
-            </div>
-            <button className="ov2-text-button" type="button" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','events')}catch{};setPage('detection')}}>
-              전체 이벤트 보기 →
-            </button>
-          </div>
-
-          <div className="ov2-live-list">
-            {events.slice(0,4).map(e=>(
-              <button type="button" className="ov2-live-row ov2-live-button" key={e.id??e.event_id} onClick={()=>setSelectedOverviewEvent(e)}>
-                <span className="ov2-event-id">#{e.id??e.event_id}</span>
-                <span>{timeOnly(e.timestamp||e.created_at)}</span>
-                <b>{e.user||'-'}</b>
-                <strong>{koEvent(e.event_type)}</strong>
-                <span>Risk {num(e.risk_score).toFixed(2)}</span>
-                <em className={riskClass(e.risk_level)}>{String(e.risk_level||'LOW').toUpperCase()}</em>
-              </button>
-            ))}
-            {!events.length&&<div className="ov2-empty">아직 수집된 이벤트가 없습니다.</div>}
-          </div>
-
-          {error&&<Notice type="error">API 연결 오류: {error}</Notice>}
-        </section>
-
-        <section className="ov2-block">
-          <div className="ov2-section-head">
-            <div>
               <span>ANALYTICS</span>
               <h3>보안 분석 요약</h3>
             </div>
@@ -3102,17 +3074,44 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
         <section className="ov2-block">
           <div className="ov2-section-head">
             <div>
+              <span>LIVE ACTIVITY</span>
+              <h3>최근 보안 활동</h3>
+            </div>
+            <button className="ov2-text-button" type="button" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','events')}catch{};setPage('detection')}}>
+              전체 이벤트 보기 →
+            </button>
+          </div>
+
+          <div className="ov2-live-list">
+            {events.slice(0,4).map(e=>(
+              <button type="button" className="ov2-live-row ov2-live-button" key={e.id??e.event_id} onClick={()=>setSelectedOverviewEvent(e)}>
+                <span className="ov2-event-id">#{e.id??e.event_id}</span>
+                <span>{timeOnly(e.timestamp||e.created_at)}</span>
+                <b>{e.user||'-'}</b>
+                <strong>{koEvent(e.event_type)}</strong>
+                <span>Risk {num(e.risk_score).toFixed(2)}</span>
+                <em className={riskClass(e.risk_level)}>{String(e.risk_level||'LOW').toUpperCase()}</em>
+              </button>
+            ))}
+            {!events.length&&<div className="ov2-empty">아직 수집된 이벤트가 없습니다.</div>}
+          </div>
+
+          {error&&<Notice type="error">API 연결 오류: {error}</Notice>}
+        </section>
+
+        <section className="ov2-block">
+          <div className="ov2-section-head">
+            <div>
               <span>PRIORITY</span>
               <h3>현재 우선 확인 대상</h3>
             </div>
             <p>행을 누르면 상세 정보를 확인할 수 있습니다.</p>
           </div>
 
-          <div className="ov2-table-grid">
+          <div className="ov2-table-grid ov2-table-stack">
             <article className="ov2-data-card">
               <div className="ov2-data-title-row">
                 <div>
-                  <span>RISK EVENTS</span>
                   <div className="ov2-data-title">개별 위험 이벤트</div>
                 </div>
                 <small>위험도 상위 5건</small>
@@ -3123,7 +3122,6 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
             <article className="ov2-data-card">
               <div className="ov2-data-title-row">
                 <div>
-                  <span>RISK USERS</span>
                   <div className="ov2-data-title">현재 위험 사용자</div>
                 </div>
                 <small>위험도 상위 5명</small>
@@ -3134,10 +3132,10 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
         </section>
 
         <section className="ov2-block">
-          <div className="ov2-section-head"><div><span>OPEN INCIDENTS</span><h3>현재 열린 사고</h3></div><button className="ov2-text-button" type="button" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','incidents')}catch{};setPage('detection')}}>사고 분석 보기 →</button></div>
+          <div className="ov2-section-head"><div><span>OPEN INCIDENTS</span><h3>최근 사고</h3></div><button className="ov2-text-button" type="button" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','incidents')}catch{};setPage('detection')}}>사고 분석 보기 →</button></div>
           <div className="incident-summary-list">
-            {incidents.filter(i=>String(i.status||'OPEN').toUpperCase()!=='CLOSED').slice(0,5).map(i=><button type="button" key={i.id??i.incident_id} className="incident-summary-row" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','incidents');sessionStorage.setItem('sentinel_focus_incident_id',String(i.id??i.incident_id??''))}catch{};setPage('detection')}}><span>#{i.id??i.incident_id}</span><b>{i.user||i.username||'-'}</b><strong>{i.title||i.incident_type||'보안 사고'}</strong><em className={riskClass(i.severity||i.risk_level)}>{String(i.severity||i.risk_level||'-').toUpperCase()}</em><small>{String(i.status||'OPEN').toUpperCase()}</small></button>)}
-            {!incidents.some(i=>String(i.status||'OPEN').toUpperCase()!=='CLOSED')&&<div className="ov2-empty">현재 열린 보안 사고가 없습니다.</div>}
+            {incidents.map(i=><button type="button" key={i.id??i.incident_id} className="incident-summary-row" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','incidents');sessionStorage.setItem('sentinel_focus_incident_id',String(i.id??i.incident_id??''))}catch{};setPage('detection')}}><span>#{i.id??i.incident_id}</span><b>{i.user||i.username||'-'}</b><strong>{i.title||i.incident_type||'보안 사고'}</strong><em className={riskClass(i.severity||i.risk_level)}>{String(i.severity||i.risk_level||'-').toUpperCase()}</em><small>{String(i.status||'OPEN').toUpperCase()}</small></button>)}
+            {!incidents.length&&<div className="ov2-empty">표시할 최근 사고가 없습니다.</div>}
           </div>
         </section>
 

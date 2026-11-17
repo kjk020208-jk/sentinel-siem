@@ -6911,3 +6911,68 @@ textarea:focus{
   line-height:1.6;
 }
 
+
+/* SENTINEL Overview final polish */
+.ov2-analytics{margin-bottom:2px}
+
+.ov2-live-list .ov2-live-row{
+  font-size:11px;
+  min-height:42px;
+}
+.ov2-live-list .ov2-live-row b,
+.ov2-live-list .ov2-live-row strong{font-size:11px}
+.ov2-live-list .ov2-live-row span,
+.ov2-live-list .ov2-live-row em{font-size:10px}
+
+/* 이벤트 유형 도넛 중앙 텍스트 */
+.ov2-analytics .ov2-chart-card:nth-child(2) .donut-center strong,
+.ov2-analytics .ov2-chart-card:nth-child(2) .pie-center strong,
+.ov2-analytics .ov2-chart-card:nth-child(2) .chart-center strong{
+  font-size:20px !important;
+  line-height:1.1 !important;
+}
+
+.ov2-table-grid.ov2-table-stack{
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:18px !important;
+}
+.ov2-table-stack .ov2-data-card{
+  min-width:0;
+  width:100%;
+}
+.ov2-table-stack .table-wrap{
+  width:100%;
+  max-width:100%;
+}
+.ov2-table-stack table{
+  width:100%;
+  table-layout:auto;
+}
+.ov2-table-stack th,
+.ov2-table-stack td{
+  white-space:nowrap;
+}
+.ov2-table-stack .ov2-data-title-row>div>span{
+  display:none !important;
+}
+
+.incident-summary-list{
+  max-height:330px;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-width:thin;
+}
+.incident-summary-row{
+  font-size:11px;
+  min-height:42px;
+}
+.incident-summary-row span,
+.incident-summary-row b,
+.incident-summary-row strong,
+.incident-summary-row em,
+.incident-summary-row small{
+  font-size:11px;
+}
+.incident-summary-row strong{font-size:11.5px}
+
