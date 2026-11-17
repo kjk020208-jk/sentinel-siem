@@ -1,5 +1,6 @@
-﻿from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 import os
 
 
@@ -50,13 +51,38 @@ print(
 engine = create_engine(
     DATABASE_URL,
     connect_args={
-        "check_same_thread": False
-    }
+        "check_same_thread": False,
+        "timeout": 30,
+    },
+    poolclass=NullPool,
 )
+
+
+@event.listens_for(engine, "connect")
+def configure_sqlite_connection(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+
+    try:
+        # 읽기/쓰기 동시성 개선
+        cursor.execute("PRAGMA journal_mode=WAL")
+
+        # WAL 모드에서 성능과 안정성 균형
+        cursor.execute("PRAGMA synchronous=NORMAL")
+
+        # SQLite 잠금 발생 시 최대 30초 대기
+        cursor.execute("PRAGMA busy_timeout=30000")
+
+        # 외래키 제약 활성화
+        cursor.execute("PRAGMA foreign_keys=ON")
+
+    finally:
+        cursor.close()
+
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
+    expire_on_commit=False,
     bind=engine
 )
 
