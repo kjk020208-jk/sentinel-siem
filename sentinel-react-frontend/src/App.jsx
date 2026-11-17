@@ -1800,9 +1800,9 @@ function SoarControlPage(){
   }
 
   const responseLevelKo={
-    OBSERVE:'관찰',
+    OBSERVE:'관찰 단계',
     ENHANCED_MONITORING:'강화 모니터링',
-    PREPARE_CONTROL:'제어 준비',
+    PREPARE_CONTROL:'선제 대응 준비',
     SELECTIVE_PREVENT:'선별적 차단'
   }
 
@@ -2072,58 +2072,58 @@ function SoarControlPage(){
     FAILED:'실행 실패',
     AWAITING_ADMIN:'관리자 승인 대기',
     REJECTED:'해제 거절',
-    SUPERSEDED:'최신 제어로 대체'
+    SUPERSEDED:'최신 제어로 갱신'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const operationKo=v=>String(v||'').toUpperCase()==='RELEASE'?'해제':'적용'
 
   const stageKo=v=>({
     ACCESS_ATTEMPT:'비정상 접근 시도',
-    ACCOUNT_COMPROMISE:'계정 침해 의심',
-    ACCOUNT_ACCESS:'비정상 계정 접근',
-    SENSITIVE_DATA_ACCESS:'민감정보 접근',
-    DEVICE_PREPARATION:'외부 장치 사용 준비',
-    EXFILTRATION_PREPARATION:'정보 유출 준비'
+    ACCOUNT_COMPROMISE:'계정 탈취 의심',
+    ACCOUNT_ACCESS:'의심스러운 계정 접근',
+    SENSITIVE_DATA_ACCESS:'민감정보 접근 위험',
+    DEVICE_PREPARATION:'외부 저장장치 사용 정황',
+    EXFILTRATION_PREPARATION:'유출 준비 행위 탐지'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const vectorKo=v=>({
     NONE:'없음',
-    ACCOUNT_COMPROMISE:'계정 침해 가능성',
-    SENSITIVE_DATA_ACCESS:'민감정보 접근',
-    USB_EXFILTRATION:'USB 기반 정보 유출',
-    POTENTIAL_EXFILTRATION:'정보 유출 가능성'
+    ACCOUNT_COMPROMISE:'계정 탈취 위험',
+    SENSITIVE_DATA_ACCESS:'민감정보 접근 위험',
+    USB_EXFILTRATION:'USB를 통한 정보 유출 위험',
+    POTENTIAL_EXFILTRATION:'정보 유출 위험'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const responseLevelDisplayKo=v=>({
-    OBSERVE:'관찰',
+    OBSERVE:'관찰 단계',
     ENHANCED_MONITORING:'강화 모니터링',
-    PREPARE_CONTROL:'제어 준비',
-    SELECTIVE_PREVENT:'선택적 선제 대응',
-    PREVENT:'선제 차단'
+    PREPARE_CONTROL:'선제 대응 준비',
+    SELECTIVE_PREVENT:'선제 차단 단계',
+    PREVENT:'즉시 차단 단계'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const controlKo=v=>({
-    USB_WRITE_RESTRICT:'USB 쓰기 제한',
-    NETWORK_RESTRICT:'네트워크 제한',
-    PROCESS_TERMINATE:'프로세스 종료',
+    USB_WRITE_RESTRICT:'USB 쓰기 차단',
+    NETWORK_RESTRICT:'네트워크 통신 차단',
+    PROCESS_TERMINATE:'위험 프로세스 종료',
     NONE:'없음'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const predictionStatusKo=v=>({
-    PROPOSED:'승인 대기',
-    CONTROL_QUEUED:'제어 대기',
-    OBSERVING:'관찰 중',
+    PROPOSED:'관리자 승인 대기',
+    CONTROL_QUEUED:'제어 실행 대기',
+    OBSERVING:'위협 관찰 중',
     APPROVED:'승인 완료',
-    REJECTED:'거절',
-    CONTROL_FAILED:'제어 실패',
-    CONTROLLED:'제어 적용',
-    SUPERSEDED:'최신 제어로 대체'
+    REJECTED:'관리자 거절',
+    CONTROL_FAILED:'제어 실행 실패',
+    CONTROLLED:'제어 적용 완료',
+    SUPERSEDED:'최신 제어로 갱신'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const requestedByKo=v=>({
-    PREDICTIVE_ENGINE:'예측 엔진',
+    PREDICTIVE_ENGINE:'예측 대응 엔진',
     USER:'사용자',
-    DLP_ALERT_ADMIN:'DLP 관리자',
+    DLP_ALERT_ADMIN:'DLP 관리자 요청',
     ADMIN:'관리자',
     SYSTEM:'시스템'
   }[String(v||'').toUpperCase()]||v||'-')
@@ -2169,24 +2169,24 @@ function SoarControlPage(){
   const latestGruPrediction=latestThreatPrediction
 
   return <>{alertContext&&<Notice type="warning"><b>DLP 대응 대상 이벤트 · Event #{alertContext.id??alertContext.event_id??'-'}</b><br/>{alertContext.user||'-'} {'·'} {koEvent(alertContext.event_type)} {'·'} Risk {num(alertContext.risk_score).toFixed(2)} {'·'} {alertContext.process_name||'-'}<div className="alert-actions"><button className="btn danger" disabled={Boolean(busy)} onClick={queueDlpProcessTerminate}>{busy==='dlp-process-terminate'?'제어 요청 중...':'탐지 프로세스 즉시 종료'}</button></div></Notice>}
-    <SectionHeader>예측 위협 진행 상태</SectionHeader>
+    <SectionHeader>위협 진행 분석</SectionHeader>
     <div className="section-caption">
-      최근 사용자 행동과 Risk · Sequence · Personal/Peer UEBA 신호를 결합해 위협 진행 단계를 판단하며, 표시되는 Prediction 수치는 마지막으로 저장된 탐지 결과입니다.
-      조건이 충분한 경우 제한적인 Micro-Control을 수행합니다.
+      최근 사용자 행위와 위험도 · 공격 시퀀스 · 개인/동료 기준선 분석을 결합해 현재 위협 진행 단계를 판단합니다.
+      위험 신호가 충분하면 단계적으로 선제 대응을 수행합니다.
     </div>
 
     {err&&<Notice type="error">SOAR API 오류 · {err}</Notice>}
     {msg&&<Notice>{msg}</Notice>}
 
     <div className="st-metric-grid cols4">
-      <StMetric label="최근 탐지 위협 단계" value={stageKo(latestPrediction?.current_stage)} help="최근 Prediction"/>
-      <StMetric label="최근 탐지 공격 진행도" value={latestPrediction?.threat_progress==null?'-':`${latestPrediction.threat_progress}%`} help="진행도"/>
-      <StMetric label="최근 탐지 신뢰도" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={vectorKo(latestPrediction?.predicted_vector)}/>
-      <StMetric label="자동 경량 제어" value="활성화" help="정책 활성 상태"/>
+      <StMetric label="현재 위협 단계" value={stageKo(latestPrediction?.current_stage)} help="최근 Prediction"/>
+      <StMetric label="공격 진행도" value={latestPrediction?.threat_progress==null?'-':`${latestPrediction.threat_progress}%`} help="진행도"/>
+      <StMetric label="탐지 신뢰도" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={vectorKo(latestPrediction?.predicted_vector)}/>
+      <StMetric label="자동 선제 대응" value="활성화" help="정책 활성 상태"/>
     </div>
 
     {latestPrediction&&<>
-      <SectionHeader>최근 탐지 결과</SectionHeader>
+      <SectionHeader>최근 위협 탐지 결과</SectionHeader>
       <SimpleTable
         headers={['사용자','대상 PC','현재 단계','예측 벡터','대응 단계','추천 제어','상태','제어 ID']}
         rows={[[
@@ -2240,7 +2240,7 @@ function SoarControlPage(){
       </Field>
     </div>
 
-    <SectionHeader>예측 기반 제어 판단</SectionHeader>
+    <SectionHeader>예측 기반 대응 판단</SectionHeader>
     {proposedPredictions.length===0
       ? <Notice>현재 선택한 사용자/대상 PC에서 관리자의 판단을 기다리는 Prediction이 없습니다.</Notice>
       : <>
@@ -2295,7 +2295,7 @@ function SoarControlPage(){
         </>
     }
 
-    <SectionHeader>예측 이력</SectionHeader>
+    <SectionHeader>위협 예측 이력</SectionHeader>
     <SimpleTable
       tall
       headers={['ID','시각','사용자','대상 PC','단계','진행도','예측 벡터','신뢰도','대응 단계','추천 제어','상태','제어 ID']}
