@@ -912,6 +912,76 @@ function RiskExplanation({data}){
   </div>
 }
 
+
+const INCIDENT_REVIEW_KEY='sentinel_reviewed_incidents_v1'
+
+function incidentReviewMarker(i){
+  return String(
+    i?.last_seen||
+    i?.updated_at||
+    i?.timestamp||
+    i?.created_at||
+    ''
+  )
+}
+
+function reviewedIncidentMap(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem(INCIDENT_REVIEW_KEY)||'{}')
+    return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{}
+  }catch{
+    return {}
+  }
+}
+
+function isIncidentReviewed(i){
+  const id=String(i?.id??i?.incident_id??'')
+  if(!id)return false
+  const map=reviewedIncidentMap()
+  return String(map[id]||'')===incidentReviewMarker(i)
+}
+
+function markIncidentReviewed(i){
+  const id=String(i?.id??i?.incident_id??'')
+  if(!id)return
+  try{
+    const map=reviewedIncidentMap()
+    map[id]=incidentReviewMarker(i)
+    const entries=Object.entries(map).slice(-300)
+    localStorage.setItem(INCIDENT_REVIEW_KEY,JSON.stringify(Object.fromEntries(entries)))
+  }catch{}
+}
+
+function incidentDisplayTitle(i){
+  const direct=i?.title||i?.incident_type||i?.name
+  if(direct&&String(direct).trim()&&String(direct).trim()!=='보안 사고')return direct
+
+  const reason=String(i?.reason||i?.summary||i?.description||'').trim()
+  if(reason)return reason
+
+  const vector=String(i?.predicted_vector||i?.attack_vector||'').toUpperCase()
+  if(vector==='POTENTIAL_EXFILTRATION')return '정보 유출 의심'
+  if(vector==='USB_EXFILTRATION')return 'USB 기반 정보 유출 의심'
+  if(vector==='ACCOUNT_COMPROMISE')return '계정 탈취 의심'
+
+  return '다중 이상행위 상관분석 사고'
+}
+
+function incidentRelatedCount(i){
+  const arrays=[
+    i?.event_ids,
+    i?.related_event_ids,
+    i?.events,
+    i?.storyline,
+    i?.timeline
+  ]
+  for(const v of arrays){
+    if(Array.isArray(v)&&v.length)return v.length
+  }
+  const n=Number(i?.event_count??i?.related_event_count??i?.events_count)
+  return Number.isFinite(n)?n:0
+}
+
 function IncidentSelector({incidents,selectedId,setSelectedId}){return <select className="select" value={selectedId||''} onChange={e=>setSelectedId(e.target.value)}>{incidents.map(i=>{const iid=i.id||i.incident_id;const sev=String(i.severity||i.risk_level||'-').toUpperCase();const stat=String(i.status||'OPEN').toUpperCase();const user=i.user||i.username||'-';const corr=num(i.correlation_score).toFixed(1);const title=i.title||i.incident_type||'보안 사고';return <option key={iid} value={iid}>{`${iid}  |  ${sev}  |  ${stat}  |  ${user}  |  Correlation ${corr}  |  ${title}`}</option>})}</select>}
 function IncidentsPage({incidents,allEvents=[],initialId}){
   const[level,setLevel]=useState('전체'),[status,setStatus]=useState('전체'),[id,setId]=useState(initialId||incidents[0]?.id||''),[detail,setDetail]=useState(null),[err,setErr]=useState(''),[ai,setAi]=useState(null),[incidentAiError,setIncidentAiError]=useState(''),[aiBusy,setAiBusy]=useState(false),[playbook,setPlaybook]=useState(null),[selectedEvent,setSelectedEvent]=useState(''),[eventExplain,setEventExplain]=useState(null),[eventAI,setEventAI]=useState(null),[eventAiError,setEventAiError]=useState(''),[eventAiBusy,setEventAiBusy]=useState(false)
@@ -941,6 +1011,11 @@ function IncidentsPage({incidents,allEvents=[],initialId}){
     api.playbook(id).then(setPlaybook).catch(()=>setPlaybook(null))
   },[id])
   const inc=detail||filtered.find(i=>String(i.id||i.incident_id)===String(id))||null
+
+  useEffect(()=>{
+    if(inc)markIncidentReviewed(inc)
+  },[id,detail?.updated_at,detail?.last_seen])
+
   const evs=incidentEvents(inc,allEvents)
   const storyRaw=arr(inc?.storyline,['attack_storyline','timeline','events'])
   const story=storyRaw.length?storyRaw:evs
@@ -2800,11 +2875,15 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
 
   const currentHighRiskEvent=recentHighRiskEvents[0]||null
 
-  const openHighRiskIncidents=incidents.filter(i=>{
+  const allOpenHighRiskIncidents=incidents.filter(i=>{
     const status=String(i.status||'OPEN').toUpperCase()
     const severity=String(i.severity||i.risk_level||'').toUpperCase()
     return status!=='CLOSED'&&['HIGH','CRITICAL'].includes(severity)
   })
+
+  // 이미 확인한 사고는 메인 "확인 필요" 대상에서 제외한다.
+  // 단, 사고가 갱신(last_seen/updated_at 변경)되면 다시 확인 대상으로 표시된다.
+  const openHighRiskIncidents=allOpenHighRiskIncidents.filter(i=>!isIncidentReviewed(i))
 
   const currentHighRiskIncident=openHighRiskIncidents[0]||null
 
@@ -2987,7 +3066,7 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
               {currentHighRiskEvent
                 ? `${currentHighRiskEvent.user||'사용자'}에서 ${String(currentHighRiskEvent.risk_level||'HIGH').toUpperCase()} 위험 이벤트가 탐지되었습니다.`
                 : currentHighRiskIncident
-                  ? `현재 대응이 필요한 고위험 사고 ${openHighRiskIncidents.length}건이 있습니다.`
+                  ? `아직 확인하지 않은 고위험 사고 ${openHighRiskIncidents.length}건이 있습니다.`
                   : recent60>0
                     ? '새로운 보안 활동을 실시간으로 분석하고 있습니다.'
                     : '현재 즉시 대응이 필요한 고위험 활동은 없습니다.'}
@@ -3020,7 +3099,7 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
                 onClick={()=>setShowHighRiskIncidents(true)}
                 disabled={!openHighRiskIncidents.length}
               >
-                열린 고위험 사고 <b>{openHighRiskIncidents.length}</b>
+                미확인 고위험 사고 <b>{openHighRiskIncidents.length}</b>
               </button>
             </div>
           </div>
@@ -3198,8 +3277,9 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
           <aside className="quick-detail-panel high-risk-incident-panel">
             <div className="quick-detail-head">
               <div>
-                <span>HIGH RISK INCIDENTS</span>
-                <h3>열린 고위험 사고 {openHighRiskIncidents.length}건</h3>
+                <span>확인 필요 사고</span>
+                <h3>미확인 고위험 사고 {openHighRiskIncidents.length}건</h3>
+                <p className="incident-panel-description">사고를 열어 상세 내용을 확인하면 메인의 확인 필요 목록에서 제외됩니다. 이후 새로운 행위가 추가되면 다시 표시됩니다.</p>
               </div>
               <button type="button" className="quick-close" onClick={()=>setShowHighRiskIncidents(false)}>×</button>
             </div>
@@ -3208,8 +3288,9 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
               {openHighRiskIncidents.map(i=><button
                 key={i.id??i.incident_id}
                 type="button"
-                className="high-risk-incident-row"
+                className="high-risk-incident-card"
                 onClick={()=>{
+                  markIncidentReviewed(i)
                   try{
                     sessionStorage.setItem('sentinel_detection_tab','incidents')
                     sessionStorage.setItem('sentinel_focus_incident_id',String(i.id??i.incident_id??''))
@@ -3218,22 +3299,48 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
                   setPage('detection')
                 }}
               >
-                <div className="high-risk-incident-main">
-                  <span>#{i.id??i.incident_id}</span>
-                  <b>{i.user||i.username||'-'}</b>
-                  <strong>{i.title||i.incident_type||'보안 사고'}</strong>
+                <div className="incident-card-top">
+                  <div className="incident-card-title-wrap">
+                    <span className="incident-card-id">사고 #{i.id??i.incident_id}</span>
+                    <strong className="incident-card-title">{incidentDisplayTitle(i)}</strong>
+                  </div>
+                  <em className={`incident-severity ${riskClass(i.severity||i.risk_level)}`}>
+                    {String(i.severity||i.risk_level||'-').toUpperCase()}
+                  </em>
                 </div>
-                <div className="high-risk-incident-meta">
-                  <em className={riskClass(i.severity||i.risk_level)}>{String(i.severity||i.risk_level||'-').toUpperCase()}</em>
-                  <small>{String(i.status||'OPEN').toUpperCase()}</small>
-                  <small>{fmt(i.updated_at||i.created_at||i.timestamp)}</small>
-                </div>
-              </button>)}
-            </div>
 
-            <div className="quick-context-card">
-              <span>안내</span>
-              <p>사고를 선택하면 탐지 및 사고 분석 화면에서 해당 사고의 연관 이벤트와 공격 흐름을 확인할 수 있습니다.</p>
+                <div className="incident-card-user">
+                  <span>사용자</span>
+                  <b>{i.user||i.username||'-'}</b>
+                </div>
+
+                <div className="incident-card-metrics">
+                  <div>
+                    <span>상관분석 점수</span>
+                    <b>{num(i.correlation_score).toFixed(1)}</b>
+                  </div>
+                  <div>
+                    <span>연관 이벤트</span>
+                    <b>{incidentRelatedCount(i)||'-'}건</b>
+                  </div>
+                  <div>
+                    <span>상태</span>
+                    <b>{String(i.status||'OPEN').toUpperCase()}</b>
+                  </div>
+                  <div>
+                    <span>최근 탐지</span>
+                    <b>{fmt(i.last_seen||i.updated_at||i.created_at||i.timestamp)}</b>
+                  </div>
+                </div>
+
+                <div className="incident-card-action">상세 분석 보기 →</div>
+              </button>)}
+
+              {!openHighRiskIncidents.length&&
+                <div className="incident-reviewed-empty">
+                  <b>현재 미확인 고위험 사고가 없습니다.</b>
+                  <span>확인한 사고는 아래 메인의 ‘최근 사고’에서 계속 조회할 수 있습니다.</span>
+                </div>}
             </div>
           </aside>
         </div>}
