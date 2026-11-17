@@ -1205,6 +1205,65 @@ def create_event(
                 status_code=401,
                 detail="유효하지 않은 SENTINEL Agent Token입니다."
             )
+    # -------------------------------------------------
+    # Baseline seed recovery status query
+    # -------------------------------------------------
+    # 기존 POST /events Agent 경로를 이용하므로 auth.py 추가 수정이 필요 없다.
+    if (
+        event.user == "__seed_status__"
+        and event.event_type == "__seed_status__"
+        and event.source == "baseline_seed_real_users_remote_v1"
+    ):
+        target_users = ["김개발", "김재무"]
+        status_result = {}
+
+        for username in target_users:
+            rows = (
+                db.query(SecurityEvent)
+                .filter(
+                    SecurityEvent.user == username,
+                    SecurityEvent.source == event.source,
+                )
+                .order_by(SecurityEvent.id.asc())
+                .all()
+            )
+
+            timestamps = [
+                row.timestamp
+                for row in rows
+                if getattr(row, "timestamp", None) is not None
+            ]
+
+            status_result[username] = {
+                "count": len(rows),
+                "low_count": sum(
+                    1
+                    for row in rows
+                    if str(getattr(row, "risk_level", "") or "").upper() == "LOW"
+                ),
+                "raw_event_ids": [
+                    str(row.raw_event_id)
+                    for row in rows
+                    if getattr(row, "raw_event_id", None)
+                ],
+                "first_timestamp": (
+                    min(timestamps).isoformat()
+                    if timestamps
+                    else None
+                ),
+                "last_timestamp": (
+                    max(timestamps).isoformat()
+                    if timestamps
+                    else None
+                ),
+            }
+
+        return {
+            "message": "Baseline seed status",
+            "source": event.source,
+            "users": status_result,
+        }
+
     # --------------------------------
     # 모니터링 사용자 검사
     #
@@ -1242,6 +1301,39 @@ def create_event(
                 f"{event.user}"
             )
         )
+
+    # -------------------------------------------------
+    # Remote baseline seed idempotency
+    # -------------------------------------------------
+    # 502가 응답 단계에서 발생해도 동일 seed 이벤트의 중복 저장을 막는다.
+    if (
+        event.source == "baseline_seed_real_users_remote_v1"
+        and event.raw_event_id
+    ):
+        existing_seed_event = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == event.user,
+                SecurityEvent.source == event.source,
+                SecurityEvent.raw_event_id == event.raw_event_id,
+            )
+            .first()
+        )
+
+        if existing_seed_event is not None:
+            return {
+                "message": "Baseline seed event already stored",
+                "monitoring_user": event.user,
+                "duplicate": True,
+                "event_id": existing_seed_event.id,
+                "risk_score": float(existing_seed_event.risk_score or 0),
+                "risk_level": existing_seed_event.risk_level,
+                "timestamp": (
+                    existing_seed_event.timestamp.isoformat()
+                    if existing_seed_event.timestamp
+                    else None
+                ),
+            }
 
     # -------------------------------------------------
     # DLP entry-point detection
