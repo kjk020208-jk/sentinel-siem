@@ -276,8 +276,12 @@ def _control_active_or_pending(db, target_host, action_type):
             ):
                 return True
 
-    pending_releases = [
-        row for row in rows
+    # 오래된 RELEASE 요청이 DB에 남아 있어도
+    # 새 공격 Episode의 자동 제어를 영구적으로 막지 않는다.
+    #
+    # AWAITING_ADMIN / QUEUED / CLAIMED RELEASE도
+    # 최근 작업일 때만 실제 해제 진행 상태로 인정한다.
+    for row in rows:
         if (
             row.operation == 'RELEASE'
             and row.status in {
@@ -285,11 +289,18 @@ def _control_active_or_pending(db, target_host, action_type):
                 'QUEUED',
                 'CLAIMED',
             }
-        )
-    ]
+        ):
+            release_activity_time = (
+                row.claimed_at
+                or row.updated_at
+                or row.created_at
+            )
 
-    if pending_releases:
-        return True
+            if (
+                release_activity_time is not None
+                and now - release_activity_time <= pending_stale_after
+            ):
+                return True
 
     completed = [
         row for row in rows
