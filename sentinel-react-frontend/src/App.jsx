@@ -5,8 +5,8 @@ import Plotly from 'plotly.js-dist-min'
 const PAGE_META = {
   overview: ['내부자 위협 보안 관제 센터', '전체 보안 상태 · 주요 위험 사용자 · 최근 탐지 · 열린 사고'],
   detection: ['탐지 및 사고 분석', '실시간 이벤트 · 사건 상관분석 · 공격 흐름 · AI 보조 분석'],
-  users: ['사용자 분석', '개인 기준선 · 동료 비교 · 위험도 변화 · 행동 변화 승인'],
-  response: ['대응 센터', 'Endpoint 상태 · 예측 기반 대응 · 실제 제어 · 해제 승인'],
+  users: ['사용자 분석', '모니터링 사용자 · Endpoint 연결 · 개인/동료 기준선 · 행동 변화 승인'],
+  response: ['대응 센터', '예측 기반 대응 · 실제 제어 · 해제 승인 · 자동 선제 대응'],
   cert: ['CERT 100K 성능 검증', 'CERT Insider Threat Dataset r4.2 · 100,000건 기반 탐지 성능 평가'],
   events: ['탐지 및 사고 분석', '실시간 이벤트'],
   incidents: ['탐지 및 사고 분석', '보안 사고'],
@@ -680,15 +680,38 @@ function DetectionCenterPage({events,users,summary,incidents,latestIncident}){
 }
 
 function UserCenterPage({events,users,refresh}){
-  const[tab,setTab]=useState('analysis')
-  return <><CenterTabs active={tab} onChange={setTab} tabs={[['analysis','사용자 행동 분석','개인 기준선 · 동료 비교 · 위험도 변화'],['approval','행동 변화 승인','새로운 정상 행동을 기준선에 반영']]}/>{tab==='analysis'?<UserAnalysisPage events={events} users={users} refresh={refresh}/>:<BehaviorPage/>}</>
+  const initial=(()=>{try{return sessionStorage.getItem('sentinel_user_tab')||'analysis'}catch{return'analysis'}})()
+  const[tab,setTab]=useState(initial)
+  const change=v=>{setTab(v);try{sessionStorage.setItem('sentinel_user_tab',v)}catch{}}
+  return <>
+    <CenterTabs
+      active={tab}
+      onChange={change}
+      tabs={[
+        ['analysis','사용자 행동 분석','개인 기준선 · 동료 비교 · 위험도 변화'],
+        ['endpoints','사용자 · Endpoint 관리','모니터링 사용자 등록 · Agent 연결 · 단말 상태'],
+        ['approval','행동 변화 승인','새로운 정상 행동을 기준선에 반영']
+      ]}
+    />
+    {tab==='analysis'
+      ? <UserAnalysisPage events={events} users={users} refresh={refresh}/>
+      : tab==='endpoints'
+        ? <EndpointManagementPage/>
+        : <BehaviorPage/>}
+  </>
 }
 
 function ResponseCenterPage(){
-  const initial=(()=>{try{return sessionStorage.getItem('sentinel_response_tab')||'soar'}catch{return'soar'}})()
-  const[tab,setTab]=useState(initial)
-  const change=v=>{setTab(v);try{sessionStorage.setItem('sentinel_response_tab',v)}catch{}}
-  return <><CenterTabs active={tab} onChange={change} tabs={[['soar','위협 대응','예측 · 자동 제어 · 해제 승인 · 실행 이력'],['endpoints','Endpoint','Agent 상태 · 연결 사용자 · 단말 식별']]}/>{tab==='soar'?<SoarControlPage/>:<EndpointManagementPage/>}</>
+  return <>
+    <div className="response-center-intro">
+      <div>
+        <span>ACTIVE RESPONSE</span>
+        <h3>위협 대응 및 자동 제어</h3>
+        <p>예측된 위협에 대해 선제 제어를 실행하고, 실제 Agent 수행 결과와 해제 승인 이력을 확인합니다.</p>
+      </div>
+    </div>
+    <SoarControlPage/>
+  </>
 }
 
 function EventQuickDetail({event,incidents=[],onClose,onOpenDetection,onOpenUser}){
@@ -701,6 +724,51 @@ function EventQuickDetail({event,incidents=[],onClose,onOpenDetection,onOpenUser
   const fields=[['발생 시각',fmt(event.timestamp||event.created_at)],['사용자',event.user||'-'],['이벤트',koEvent(event.event_type)],['위험도',`${num(event.risk_score).toFixed(2)} · ${String(event.risk_level||'LOW').toUpperCase()}`],['프로세스',event.process_name||'-'],['파일',event.file_name||event.file_path||'-'],['Source IP',event.source_ip||'-'],['로그인 실패',event.login_fail_count??0],['USB',event.usb_connected?'연결 감지':'-'],['Anomaly Score',num(event.anomaly_score).toFixed(2)]]
   return <div className="quick-detail-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose?.()}}><aside className="quick-detail-panel"><div className="quick-detail-head"><div><span>SECURITY EVENT</span><h3>이벤트 #{id||'-'} 상세</h3></div><button type="button" className="quick-close" onClick={onClose}>×</button></div><div className="quick-risk-summary"><div><span>위험 등급</span><strong className={riskClass(event.risk_level)}>{String(event.risk_level||'LOW').toUpperCase()}</strong></div><div><span>Risk Score</span><strong>{num(event.risk_score).toFixed(2)}</strong></div><div><span>이상 점수</span><strong>{num(event.anomaly_score).toFixed(2)}</strong></div></div><div className="quick-detail-grid">{fields.map(([k,v])=><div key={k}><span>{k}</span><b>{String(v??'-')}</b></div>)}</div><div className="quick-context-card"><span>이 이벤트가 의미하는 것</span><p>{event.event_type==='file_access'?'파일 접근 행위입니다. 민감도, 접근량, 개인 기준선, 연속 행동과 함께 위험도가 계산됩니다.':event.event_type==='process_execution'?'프로세스 실행 행위입니다. 평소 사용 프로세스 여부와 전후 행동 시퀀스를 함께 확인합니다.':['web_upload','email_send','external_transfer'].includes(String(event.event_type||'').toLowerCase())?'민감정보가 외부로 전송될 가능성이 있는 고위험 행위입니다.':`${koEvent(event.event_type)} 이벤트이며 개인 기준선·동료 비교·시퀀스·규칙 결과와 함께 분석됩니다.`}</p></div>{related&&<div className="quick-related"><span>연관 사고</span><b>#{related.id??related.incident_id} · {related.title||related.incident_type||'보안 사고'}</b><small>{String(related.severity||related.risk_level||'-').toUpperCase()} · {String(related.status||'OPEN').toUpperCase()}</small></div>}<div className="quick-detail-actions"><button className="btn primary" onClick={onOpenDetection}>탐지/사고 분석에서 보기</button><button className="btn" onClick={onOpenUser}>사용자 분석에서 보기</button></div></aside></div>
 }
+
+
+function RiskUserQuickDetail({userInfo,events=[],onClose,onOpenUser}){
+  if(!userInfo)return null
+  const userEvents=events.filter(e=>String(e.user||'')===String(userInfo.user||'')).slice(0,8)
+  const latest=userEvents[0]||userInfo.latestEvent||null
+  return <div className="quick-detail-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose?.()}}>
+    <aside className="quick-detail-panel">
+      <div className="quick-detail-head">
+        <div><span>RISK USER</span><h3>{userInfo.user||'-'} 상세</h3></div>
+        <button type="button" className="quick-close" onClick={onClose}>×</button>
+      </div>
+
+      <div className="quick-risk-summary">
+        <div><span>현재 위험 등급</span><strong className={riskClass(userInfo.level)}>{userInfo.level||'-'}</strong></div>
+        <div><span>최고 위험도</span><strong>{num(userInfo.max).toFixed(2)}</strong></div>
+        <div><span>평균 위험도</span><strong>{num(userInfo.avg).toFixed(2)}</strong></div>
+      </div>
+
+      <div className="quick-detail-grid">
+        <div><span>사용자</span><b>{userInfo.user||'-'}</b></div>
+        <div><span>최근 이벤트 수</span><b>{userInfo.count??0}</b></div>
+        <div><span>최근 핵심 행위</span><b>{latest?koEvent(latest.event_type):'-'}</b></div>
+        <div><span>최근 프로세스</span><b>{latest?.process_name||'-'}</b></div>
+      </div>
+
+      <div className="quick-context-card">
+        <span>최근 위험 이벤트</span>
+        <div className="user-risk-event-list">
+          {userEvents.length?userEvents.map(e=><button type="button" key={e.id??e.event_id} className="user-risk-event-row">
+            <span>{timeOnly(e.timestamp||e.created_at)}</span>
+            <b>{koEvent(e.event_type)}</b>
+            <em>{e.process_name||e.file_name||'-'}</em>
+            <strong className={riskClass(e.risk_level)}>{num(e.risk_score).toFixed(2)} · {String(e.risk_level||'LOW').toUpperCase()}</strong>
+          </button>):<div className="ov2-empty">최근 이벤트가 없습니다.</div>}
+        </div>
+      </div>
+
+      <div className="quick-detail-actions">
+        <button className="btn primary" onClick={onOpenUser}>사용자 분석에서 자세히 보기</button>
+      </div>
+    </aside>
+  </div>
+}
+
 
 function EventsPage({events,monitoredUsers=[],summary}){
   const[level,setLevel]=useState('전체'),[user,setUser]=useState('전체'),[type,setType]=useState('전체'),[search,setSearch]=useState(''),[selectedBehavior,setSelectedBehavior]=useState(''),[selectedExplain,setSelectedExplain]=useState(''),[explanation,setExplanation]=useState(null),[exErr,setExErr]=useState(''),[eventAI,setEventAI]=useState(null),[eventAiError,setEventAiError]=useState(''),[aiBusy,setAiBusy]=useState(false)
@@ -2674,6 +2742,7 @@ function Footer(){return <div className="footer"><span>SENTINEL · 내부자 위
 function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,error,latency}){
   const[overviewV2AckEventId,setOverviewV2AckEventId]=useState('')
   const[selectedOverviewEvent,setSelectedOverviewEvent]=useState(null)
+  const[selectedRiskUser,setSelectedRiskUser]=useState(null)
   const levels=['LOW','MEDIUM','HIGH','CRITICAL']
 
   const counts=levels.map(level=>[
@@ -2750,10 +2819,12 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
     if(belongsToLatestIncident){
       const iid=String(latestIncident?.id??latestIncident?.incident_id??'')
       if(iid)sessionStorage.setItem('sentinel_focus_incident_id',iid)
-      setPage('incidents')
+      try{sessionStorage.setItem('sentinel_detection_tab','incidents')}catch{}
+      setPage('detection')
     }else{
       sessionStorage.removeItem('sentinel_focus_incident_id')
-      setPage('events')
+      try{sessionStorage.setItem('sentinel_detection_tab','events')}catch{}
+      setPage('detection')
     }
   }
 
@@ -2965,13 +3036,102 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
           </div>
         </section>
 
+        <section className="ov2-block">
+          <div className="ov2-section-head">
+            <div>
+              <span>LIVE ACTIVITY</span>
+              <h3>최근 보안 활동</h3>
+            </div>
+            <button className="ov2-text-button" type="button" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','events')}catch{};setPage('detection')}}>
+              전체 이벤트 보기 →
+            </button>
+          </div>
 
+          <div className="ov2-live-list">
+            {events.slice(0,4).map(e=>(
+              <button type="button" className="ov2-live-row ov2-live-button" key={e.id??e.event_id} onClick={()=>setSelectedOverviewEvent(e)}>
+                <span className="ov2-event-id">#{e.id??e.event_id}</span>
+                <span>{timeOnly(e.timestamp||e.created_at)}</span>
+                <b>{e.user||'-'}</b>
+                <strong>{koEvent(e.event_type)}</strong>
+                <span>Risk {num(e.risk_score).toFixed(2)}</span>
+                <em className={riskClass(e.risk_level)}>{String(e.risk_level||'LOW').toUpperCase()}</em>
+              </button>
+            ))}
+            {!events.length&&<div className="ov2-empty">아직 수집된 이벤트가 없습니다.</div>}
+          </div>
 
+          {error&&<Notice type="error">API 연결 오류: {error}</Notice>}
+        </section>
 
+        <section className="ov2-block">
+          <div className="ov2-section-head">
+            <div>
+              <span>ANALYTICS</span>
+              <h3>보안 분석 요약</h3>
+            </div>
+            <p>현재 조회 이벤트 기준</p>
+          </div>
 
+          <div className="ov2-analytics">
+            <article className="ov2-chart-card">
+              <div className="ov2-card-head">
+                <div><span>RISK</span><h4>위험 등급 분포</h4></div>
+                <small>{events.length} events</small>
+              </div>
+              <RiskDonut counts={counts}/>
+            </article>
 
+            <article className="ov2-chart-card">
+              <div className="ov2-card-head">
+                <div><span>ACTIVITY</span><h4>이벤트 유형</h4></div>
+                <small>{types[0]?.[0]||'-'}</small>
+              </div>
+              <EventTypeDonut items={types}/>
+            </article>
 
+            <article className="ov2-risk-card">
+              <div className="ov2-card-head">
+                <div><span>RISK SCORE</span><h4>최근 평균 위험도</h4></div>
+              </div>
+              <Gauge value={avg}/>
+            </article>
+          </div>
+        </section>
 
+        <section className="ov2-block">
+          <div className="ov2-section-head">
+            <div>
+              <span>PRIORITY</span>
+              <h3>현재 우선 확인 대상</h3>
+            </div>
+            <p>행을 누르면 상세 정보를 확인할 수 있습니다.</p>
+          </div>
+
+          <div className="ov2-table-grid">
+            <article className="ov2-data-card">
+              <div className="ov2-data-title-row">
+                <div>
+                  <span>RISK EVENTS</span>
+                  <div className="ov2-data-title">개별 위험 이벤트</div>
+                </div>
+                <small>위험도 상위 5건</small>
+              </div>
+              <TopEventTable events={topEvents} onSelect={setSelectedOverviewEvent}/>
+            </article>
+
+            <article className="ov2-data-card">
+              <div className="ov2-data-title-row">
+                <div>
+                  <span>RISK USERS</span>
+                  <div className="ov2-data-title">현재 위험 사용자</div>
+                </div>
+                <small>위험도 상위 5명</small>
+              </div>
+              <TopUserTable users={topUsers} onSelect={setSelectedRiskUser}/>
+            </article>
+          </div>
+        </section>
 
         <section className="ov2-block">
           <div className="ov2-section-head"><div><span>OPEN INCIDENTS</span><h3>현재 열린 사고</h3></div><button className="ov2-text-button" type="button" onClick={()=>{try{sessionStorage.setItem('sentinel_detection_tab','incidents')}catch{};setPage('detection')}}>사고 분석 보기 →</button></div>
@@ -2982,6 +3142,17 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
         </section>
 
         <EventQuickDetail event={selectedOverviewEvent} incidents={incidents} onClose={()=>setSelectedOverviewEvent(null)} onOpenDetection={()=>{if(selectedOverviewEvent){try{sessionStorage.setItem('sentinel_focus_event_id',String(selectedOverviewEvent.id??selectedOverviewEvent.event_id??''));sessionStorage.setItem('sentinel_detection_tab','events')}catch{}}setSelectedOverviewEvent(null);setPage('detection')}} onOpenUser={()=>{if(selectedOverviewEvent?.user){try{sessionStorage.setItem('sentinel_focus_user',String(selectedOverviewEvent.user))}catch{}}setSelectedOverviewEvent(null);setPage('users')}}/>
+
+        <RiskUserQuickDetail
+          userInfo={selectedRiskUser}
+          events={events}
+          onClose={()=>setSelectedRiskUser(null)}
+          onOpenUser={()=>{
+            if(selectedRiskUser?.user){try{sessionStorage.setItem('sentinel_focus_user',String(selectedRiskUser.user))}catch{}}
+            setSelectedRiskUser(null)
+            setPage('users')
+          }}
+        />
 
         <div className="ov2-operations">
           <span>

@@ -6882,3 +6882,32 @@ textarea:focus{
 .quick-context-card{margin-bottom:14px}.quick-context-card p{margin:0;color:#c6d0dc;line-height:1.65;font-size:12px}.quick-related{display:flex;flex-direction:column;gap:2px;margin-bottom:16px}.quick-related b{color:#f8fafc}.quick-related small{color:#8794a6}.quick-detail-actions{display:flex;gap:8px;flex-wrap:wrap}
 @media(max-width:900px){.center-tabs{grid-template-columns:1fr}.incident-summary-row{grid-template-columns:70px 1fr 100px}.incident-summary-row strong{grid-column:2/4}.quick-risk-summary{grid-template-columns:1fr}.quick-detail-grid{grid-template-columns:1fr}}
 
+
+/* SENTINEL response center simplification */
+.response-center-intro{
+  margin:0 0 18px;
+  border:1px solid rgba(148,163,184,.12);
+  border-radius:14px;
+  background:#151b23;
+  padding:16px 18px;
+}
+.response-center-intro span{
+  display:block;
+  font-size:9px;
+  letter-spacing:.15em;
+  font-weight:800;
+  color:#6f7e91;
+  margin-bottom:5px;
+}
+.response-center-intro h3{
+  margin:0 0 6px;
+  color:#f8fafc;
+  font-size:16px;
+}
+.response-center-intro p{
+  margin:0;
+  color:#8e9bac;
+  font-size:11px;
+  line-height:1.6;
+}
+
