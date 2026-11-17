@@ -39,6 +39,9 @@ PREDICTION_ENABLED = os.getenv('SENTINEL_PREDICTIVE_RESPONSE_ENABLED', 'true').s
 AUTO_MICRO_CONTROL_ENABLED = os.getenv('SENTINEL_AUTO_MICRO_CONTROL_ENABLED', 'false').strip().lower() in {'1','true','yes','on'}
 AUTO_PROGRESS_THRESHOLD = int(os.getenv('SENTINEL_AUTO_MICRO_CONTROL_PROGRESS', '80'))
 AUTO_CONFIDENCE_THRESHOLD = int(os.getenv('SENTINEL_AUTO_MICRO_CONTROL_CONFIDENCE', '85'))
+NETWORK_RESTRICT_PROGRESS_THRESHOLD = int(os.getenv('SENTINEL_NETWORK_RESTRICT_PROGRESS', '96'))
+NETWORK_RESTRICT_CONFIDENCE_THRESHOLD = int(os.getenv('SENTINEL_NETWORK_RESTRICT_CONFIDENCE', '95'))
+
 
 SUSPICIOUS_PROCESSES = {'powershell.exe','pwsh.exe','cmd.exe','wscript.exe','cscript.exe','certutil.exe','curl.exe','scp.exe','ftp.exe'}
 LOGIN_FAILURE_TYPES = {'login_failure','login_failed','logon_failure'}
@@ -303,6 +306,14 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
         and confidence >= AUTO_CONFIDENCE_THRESHOLD
     ):
         recommended_control = 'USB_WRITE_RESTRICT'
+        # Progressive Escalation
+        if (
+            vector in {'USB_EXFILTRATION', 'POTENTIAL_EXFILTRATION'}
+            and sensitive
+            and progress >= NETWORK_RESTRICT_PROGRESS_THRESHOLD
+            and confidence >= NETWORK_RESTRICT_CONFIDENCE_THRESHOLD
+        ):
+            recommended_control = 'NETWORK_RESTRICT'
 
     if progress < 40 and recommended_control is None:
         return {
