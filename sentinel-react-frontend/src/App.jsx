@@ -1998,16 +1998,39 @@ function SoarControlPage(){
   const queued=scopedControls.filter(r=>['QUEUED','CLAIMED'].includes(String(r.status||'').toUpperCase()))
   const failed=scopedControls.filter(r=>String(r.status||'').toUpperCase()==='FAILED')
 
+  const predictionKey=p=>[
+    p?.user||'',
+    p?.target_host||'',
+    p?.recommended_control||'NONE'
+  ].join('|||')
+
+  const latestActivePredictionByKey=new Map()
+  scopedPredictions
+    .filter(p=>['CONTROL_QUEUED','CONTROLLED'].includes(
+      String(p.status||'').toUpperCase()
+    ))
+    .forEach(p=>{
+      const key=predictionKey(p)
+      const existing=latestActivePredictionByKey.get(key)
+      if(!existing||num(p.id)>num(existing.id)){
+        latestActivePredictionByKey.set(key,p)
+      }
+    })
+
   const latestProposedByKey=new Map()
   scopedPredictions
     .filter(p=>String(p.status||'').toUpperCase()==='PROPOSED')
     .forEach(p=>{
-      const key=[
-        p.user||'',
-        p.target_host||'',
-        p.recommended_control||'NONE'
-      ].join('|||')
-      if(!latestProposedByKey.has(key))latestProposedByKey.set(key,p)
+      const key=predictionKey(p)
+      const active=latestActivePredictionByKey.get(key)
+
+      // 같은 사용자 + Host + 추천 제어에 더 최신 제어가 이미
+      // CONTROL_QUEUED / CONTROLLED 상태라면 과거 PROPOSED는 숨긴다.
+      if(active&&num(active.id)>=num(p.id))return
+
+      if(!latestProposedByKey.has(key)){
+        latestProposedByKey.set(key,p)
+      }
     })
 
   const proposedPredictions=[...latestProposedByKey.values()]
