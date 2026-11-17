@@ -136,12 +136,65 @@ def _is_login_success(e):
     return _etype(e) in LOGIN_SUCCESS_TYPES or (getattr(e, 'login_success', None) == 1 and _etype(e) not in LOGIN_FAILURE_TYPES)
 
 
-def _recent_user_events(db, user, reference_time, limit=40, minutes=60):
+def _recent_user_events(
+    db,
+    user,
+    reference_time,
+    target_host=None,
+    limit=40,
+    minutes=60,
+):
+    # 기본적으로 최근 60분을 공격 진행 episode 후보로 사용한다.
     since = reference_time - timedelta(minutes=minutes)
-    rows = (db.query(SecurityEvent)
-        .filter(SecurityEvent.user == user, SecurityEvent.timestamp <= reference_time, SecurityEvent.timestamp >= since)
-        .order_by(SecurityEvent.timestamp.desc(), SecurityEvent.id.desc())
-        .limit(limit).all())
+
+    # 이전 SOAR 제어가 정상적으로 RELEASE 완료됐다면,
+    # 그 시점 이전 이벤트는 새 공격 episode에 재사용하지 않는다.
+    release_q = (
+        db.query(ResponseControlAction)
+        .filter(
+            ResponseControlAction.user == user,
+            ResponseControlAction.operation == 'RELEASE',
+            ResponseControlAction.status == 'COMPLETED',
+            ResponseControlAction.completed_at.isnot(None),
+        )
+    )
+
+    if target_host:
+        release_q = release_q.filter(
+            ResponseControlAction.target_host == target_host
+        )
+
+    latest_completed_release = (
+        release_q
+        .order_by(
+            ResponseControlAction.completed_at.desc(),
+            ResponseControlAction.id.desc(),
+        )
+        .first()
+    )
+
+    if (
+        latest_completed_release is not None
+        and latest_completed_release.completed_at is not None
+        and latest_completed_release.completed_at > since
+    ):
+        since = latest_completed_release.completed_at
+
+    rows = (
+        db.query(SecurityEvent)
+        .filter(
+            SecurityEvent.user == user,
+            SecurityEvent.timestamp <= reference_time,
+            SecurityEvent.timestamp > since,
+        )
+        .order_by(
+            SecurityEvent.timestamp.desc(),
+            SecurityEvent.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+
     return list(reversed(rows))
 
 
@@ -195,7 +248,12 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     if not PREDICTION_ENABLED:
         return None
 
-    events = _recent_user_events(db, user, reference_time)
+    events = _recent_user_events(
+        db,
+        user,
+        reference_time,
+        target_host=target_host,
+    )
     if not events:
         return None
 
