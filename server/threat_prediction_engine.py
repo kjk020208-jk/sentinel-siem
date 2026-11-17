@@ -234,12 +234,31 @@ def _control_active_or_pending(db, target_host, action_type):
     )
 
     now = datetime.now()
-    stale_after = timedelta(
-        seconds=max(30, CONTROL_PENDING_STALE_SECONDS)
+
+    pending_stale_after = timedelta(
+        seconds=max(
+            30,
+            int(
+                os.getenv(
+                    'SENTINEL_CONTROL_PENDING_STALE_SECONDS',
+                    '180'
+                )
+            )
+        )
     )
 
-    # 최근 QUEUED / CLAIMED만 실제 대기 작업으로 인정한다.
-    # 오래된 고아 작업은 새 자동 제어 생성을 막지 않는다.
+    completed_apply_hold = timedelta(
+        seconds=max(
+            30,
+            int(
+                os.getenv(
+                    'SENTINEL_COMPLETED_APPLY_HOLD_SECONDS',
+                    '300'
+                )
+            )
+        )
+    )
+
     for row in rows:
         if (
             row.operation == 'APPLY'
@@ -253,11 +272,25 @@ def _control_active_or_pending(db, target_host, action_type):
 
             if (
                 activity_time is not None
-                and now - activity_time <= stale_after
+                and now - activity_time <= pending_stale_after
             ):
                 return True
 
-    # 완료된 APPLY / RELEASE는 최신 완료 시각으로 실제 상태를 판단한다.
+    pending_releases = [
+        row for row in rows
+        if (
+            row.operation == 'RELEASE'
+            and row.status in {
+                'AWAITING_ADMIN',
+                'QUEUED',
+                'CLAIMED',
+            }
+        )
+    ]
+
+    if pending_releases:
+        return True
+
     completed = [
         row for row in rows
         if (
@@ -278,7 +311,16 @@ def _control_active_or_pending(db, target_host, action_type):
         ),
     )
 
-    return latest_completed.operation == 'APPLY'
+    if latest_completed.operation == 'RELEASE':
+        return False
+
+    if latest_completed.completed_at is not None:
+        age = now - latest_completed.completed_at
+
+        if age <= completed_apply_hold:
+            return True
+
+    return False
 
 def _usb_control_active_or_pending(db, target_host):
     return _control_active_or_pending(
