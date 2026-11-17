@@ -2777,7 +2777,44 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
     ? events.reduce((sum,e)=>sum+num(e.risk_score),0)/events.length
     : 0
 
+  const recent60=events.filter(e=>{
+    const time=new Date(e.timestamp||e.created_at).getTime()
+    return Number.isFinite(time)&&Date.now()-time>=0&&Date.now()-time<=60000
+  }).length
+
   const latest=events[0]
+
+  // 메인 Hero는 전체 누적 CRITICAL이 아니라 "현재 상황"을 보여준다.
+  // 최근 5분 고위험 이벤트가 있으면 우선 표시하고,
+  // 그 외에는 현재 열린 HIGH/CRITICAL 사고를 기준으로 상태를 표시한다.
+  const nowMs=Date.now()
+  const RECENT_RISK_WINDOW_MS=5*60*1000
+
+  const recentHighRiskEvents=events.filter(e=>{
+    const level=String(e.risk_level||'').toUpperCase()
+    if(!['HIGH','CRITICAL'].includes(level))return false
+    const t=new Date(e.timestamp||e.created_at).getTime()
+    return Number.isFinite(t)&&nowMs-t>=0&&nowMs-t<=RECENT_RISK_WINDOW_MS
+  })
+
+  const currentHighRiskEvent=recentHighRiskEvents[0]||null
+
+  const openHighRiskIncidents=incidents.filter(i=>{
+    const status=String(i.status||'OPEN').toUpperCase()
+    const severity=String(i.severity||i.risk_level||'').toUpperCase()
+    return status!=='CLOSED'&&['HIGH','CRITICAL'].includes(severity)
+  })
+
+  const currentHighRiskIncident=openHighRiskIncidents[0]||null
+
+  const heroState=currentHighRiskEvent
+    ? String(currentHighRiskEvent.risk_level||'HIGH').toUpperCase()
+    : currentHighRiskIncident
+      ? String(currentHighRiskIncident.severity||currentHighRiskIncident.risk_level||'HIGH').toUpperCase()
+      : recent60>0
+        ? 'MONITORING'
+        : 'STABLE'
+
   const latestRiskEventForAlertV2=events.find(e=>['HIGH','CRITICAL'].includes(String(e.risk_level||'').toUpperCase()))||null
   const latestRiskAlertIdV2=String(latestRiskEventForAlertV2?.id??latestRiskEventForAlertV2?.event_id??'')
   const ALERT_ACK_KEY='sentinel_acknowledged_security_events_v1'
@@ -2891,17 +2928,6 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
 
 
 
-  const recent60=events.filter(e=>{
-    const time=new Date(
-      e.timestamp||e.created_at
-    ).getTime()
-
-    return (
-      Number.isFinite(time) &&
-      Date.now()-time<=60000
-    )
-  }).length
-
   const riskState=
     avg>=80 ? 'CRITICAL' :
     avg>=65 ? 'HIGH' :
@@ -2945,9 +2971,9 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
             <div className="ov2-eyebrow">
               <span className={
                 `ov2-status-dot ${
-                  critical>0
+                  heroState==='CRITICAL'
                     ? 'danger'
-                    : highCritical>0
+                    : heroState==='HIGH'||heroState==='MONITORING'
                       ? 'warning'
                       : 'ok'
                 }`
@@ -2957,29 +2983,38 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
             </div>
 
             <h2>
-              {critical>0
-                ? '즉시 확인이 필요한 보안 이벤트가 있습니다.'
-                : highCritical>0
-                  ? '고위험 활동을 확인하고 있습니다.'
-                  : '현재 보안 상태는 안정적입니다.'}
+              {currentHighRiskEvent
+                ? `${currentHighRiskEvent.user||'사용자'}에서 ${String(currentHighRiskEvent.risk_level||'HIGH').toUpperCase()} 위험 이벤트가 탐지되었습니다.`
+                : currentHighRiskIncident
+                  ? `현재 대응이 필요한 고위험 사고 ${openHighRiskIncidents.length}건이 있습니다.`
+                  : recent60>0
+                    ? '새로운 보안 활동을 실시간으로 분석하고 있습니다.'
+                    : '현재 즉시 대응이 필요한 고위험 활동은 없습니다.'}
             </h2>
 
             <p>
-              사용자 행동과 엔드포인트 활동을 실시간으로 분석하고
-              이상 징후와 내부자 위협 가능성을 추적합니다.
+              {currentHighRiskEvent
+                ? `${koEvent(currentHighRiskEvent.event_type)} · Risk ${num(currentHighRiskEvent.risk_score).toFixed(2)}${currentHighRiskEvent.process_name?` · ${currentHighRiskEvent.process_name}`:''}${currentHighRiskEvent.file_name?` · ${currentHighRiskEvent.file_name}`:''}`
+                : currentHighRiskIncident
+                  ? `${currentHighRiskIncident.user||currentHighRiskIncident.username||'-'} · ${currentHighRiskIncident.title||currentHighRiskIncident.incident_type||'보안 사고'} · ${String(currentHighRiskIncident.severity||currentHighRiskIncident.risk_level||'HIGH').toUpperCase()}`
+                  : '사용자 행동과 엔드포인트 활동을 실시간으로 분석하고 이상 징후와 내부자 위협 가능성을 추적합니다.'}
             </p>
 
             <div className="ov2-hero-meta">
               <span>
-                Latest <b>#{latest?.id??'-'}</b>
+                최신 이벤트 <b>#{latest?.id??latest?.event_id??'-'}</b>
               </span>
 
               <span>
-                Updated <b>{fmt(latest?.timestamp||latest?.created_at)}</b>
+                마지막 갱신 <b>{fmt(latest?.timestamp||latest?.created_at)}</b>
               </span>
 
               <span>
-                Critical <b>{critical}</b>
+                최근 5분 고위험 <b>{recentHighRiskEvents.length}</b>
+              </span>
+
+              <span>
+                열린 고위험 사고 <b>{openHighRiskIncidents.length}</b>
               </span>
             </div>
           </div>
