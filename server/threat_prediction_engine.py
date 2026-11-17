@@ -42,6 +42,13 @@ AUTO_CONFIDENCE_THRESHOLD = int(os.getenv('SENTINEL_AUTO_MICRO_CONTROL_CONFIDENC
 NETWORK_RESTRICT_PROGRESS_THRESHOLD = int(os.getenv('SENTINEL_NETWORK_RESTRICT_PROGRESS', '96'))
 NETWORK_RESTRICT_CONFIDENCE_THRESHOLD = int(os.getenv('SENTINEL_NETWORK_RESTRICT_CONFIDENCE', '95'))
 
+# QUEUED / CLAIMED 작업이 Agent 장애나 재배포로 고아 상태가 된 경우
+# 새 Prediction 제어를 영구적으로 막지 않도록 하는 만료 시간.
+CONTROL_PENDING_STALE_SECONDS = int(
+    os.getenv('SENTINEL_CONTROL_PENDING_STALE_SECONDS', '180')
+)
+
+
 
 SUSPICIOUS_PROCESSES = {'powershell.exe','pwsh.exe','cmd.exe','wscript.exe','cscript.exe','certutil.exe','curl.exe','scp.exe','ftp.exe'}
 LOGIN_FAILURE_TYPES = {'login_failure','login_failed','logon_failure'}
@@ -209,32 +216,69 @@ def _response_level(progress, confidence):
 
 
 def _control_active_or_pending(db, target_host, action_type):
+    action_type = str(action_type or '').upper().strip()
+
     q = db.query(ResponseControlAction).filter(
-        ResponseControlAction.action_type == str(action_type or '').upper().strip()
+        ResponseControlAction.action_type == action_type
     )
+
     if target_host:
-        q = q.filter(ResponseControlAction.target_host == target_host)
+        q = q.filter(
+            ResponseControlAction.target_host == target_host
+        )
 
-    rows = q.order_by(ResponseControlAction.id.desc()).limit(30).all()
+    rows = (
+        q.order_by(ResponseControlAction.id.desc())
+        .limit(50)
+        .all()
+    )
 
-    if any(
-        r.operation == 'APPLY'
-        and r.status in {'QUEUED', 'CLAIMED'}
-        for r in rows
-    ):
-        return True
+    now = datetime.now()
+    stale_after = timedelta(
+        seconds=max(30, CONTROL_PENDING_STALE_SECONDS)
+    )
 
+    # 최근 QUEUED / CLAIMED만 실제 대기 작업으로 인정한다.
+    # 오래된 고아 작업은 새 자동 제어 생성을 막지 않는다.
+    for row in rows:
+        if (
+            row.operation == 'APPLY'
+            and row.status in {'QUEUED', 'CLAIMED'}
+        ):
+            activity_time = (
+                row.claimed_at
+                or row.updated_at
+                or row.created_at
+            )
+
+            if (
+                activity_time is not None
+                and now - activity_time <= stale_after
+            ):
+                return True
+
+    # 완료된 APPLY / RELEASE는 최신 완료 시각으로 실제 상태를 판단한다.
     completed = [
-        r for r in rows
-        if r.status == 'COMPLETED'
-        and r.operation in {'APPLY', 'RELEASE'}
+        row for row in rows
+        if (
+            row.status == 'COMPLETED'
+            and row.operation in {'APPLY', 'RELEASE'}
+            and row.completed_at is not None
+        )
     ]
 
     if not completed:
         return False
 
-    return max(completed, key=lambda r: r.id).operation == 'APPLY'
+    latest_completed = max(
+        completed,
+        key=lambda row: (
+            row.completed_at,
+            row.id,
+        ),
+    )
 
+    return latest_completed.operation == 'APPLY'
 
 def _usb_control_active_or_pending(db, target_host):
     return _control_active_or_pending(
