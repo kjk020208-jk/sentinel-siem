@@ -138,40 +138,118 @@ def claim_next_action(
     hostname: str,
     agent_id: Optional[str] = None,
 ):
+    hostname_l = (hostname or "").lower().strip()
+    agent_id_l = (agent_id or "").lower().strip()
+
+    # 최신 QUEUED 작업부터 확인한다.
+    # 예전에는 id ASC라서 오래된 중복 제어가 순차 실행되는 문제가 있었다.
     rows = (
         db.query(ResponseControlAction)
         .filter(ResponseControlAction.status == "QUEUED")
-        .order_by(ResponseControlAction.id.asc())
-        .limit(50)
+        .order_by(ResponseControlAction.id.desc())
+        .limit(100)
         .all()
     )
 
-    hostname_l = (hostname or "").lower()
-    agent_id_l = (agent_id or "").lower()
-
-    selected = None
+    matching = []
 
     for row in rows:
         target_agent_id = str(
             getattr(row, "target_agent_id", None) or ""
-        ).lower()
+        ).lower().strip()
 
         target_host = str(
             row.target_host or ""
-        ).lower()
+        ).lower().strip()
 
         if target_agent_id:
             if agent_id_l and target_agent_id == agent_id_l:
-                selected = row
-                break
+                matching.append(row)
             continue
 
         if not target_host or target_host == hostname_l:
-            selected = row
-            break
+            matching.append(row)
 
-    if selected is None:
+    if not matching:
         return None
+
+    # RELEASE가 있으면 같은 대상/제어유형의 APPLY보다 우선한다.
+    # 사용자가 해제 승인을 받은 뒤 과거 APPLY가 다시 실행되는 것을 방지한다.
+    release_rows = [
+        row for row in matching
+        if row.operation == "RELEASE"
+    ]
+
+    if release_rows:
+        selected = max(
+            release_rows,
+            key=lambda row: row.id,
+        )
+    else:
+        selected = max(
+            matching,
+            key=lambda row: row.id,
+        )
+
+    selected_action_type = str(
+        selected.action_type or ""
+    ).upper().strip()
+
+    selected_target_host = str(
+        selected.target_host or ""
+    ).lower().strip()
+
+    selected_target_agent_id = str(
+        getattr(selected, "target_agent_id", None) or ""
+    ).lower().strip()
+
+    # 같은 대상 + 같은 제어 유형의 오래된 QUEUED 중복 작업은
+    # 다시 실행되지 않도록 SUPERSEDED 처리한다.
+    superseded = []
+
+    for row in matching:
+        if row.id == selected.id:
+            continue
+
+        row_action_type = str(
+            row.action_type or ""
+        ).upper().strip()
+
+        row_target_host = str(
+            row.target_host or ""
+        ).lower().strip()
+
+        row_target_agent_id = str(
+            getattr(row, "target_agent_id", None) or ""
+        ).lower().strip()
+
+        same_action = (
+            row_action_type == selected_action_type
+        )
+
+        same_target = False
+
+        if selected_target_agent_id:
+            same_target = (
+                row_target_agent_id == selected_target_agent_id
+            )
+        elif selected_target_host:
+            same_target = (
+                row_target_host == selected_target_host
+            )
+        else:
+            same_target = (
+                not row_target_host
+                and not row_target_agent_id
+            )
+
+        if same_action and same_target:
+            row.status = "SUPERSEDED"
+            row.completed_at = datetime.now()
+            row.agent_message = (
+                f"최신 제어 #{selected.id}에 의해 대체됨"
+            )
+            superseded.append(row.id)
 
     selected.status = "CLAIMED"
     selected.claimed_at = datetime.now()
