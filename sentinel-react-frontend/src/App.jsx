@@ -2066,15 +2066,67 @@ function SoarControlPage(){
   }
 
   const statusKo=v=>({
-    QUEUED:'대기',
+    QUEUED:'실행 대기',
     CLAIMED:'Agent 수신',
     COMPLETED:'실행 완료',
     FAILED:'실행 실패',
     AWAITING_ADMIN:'관리자 승인 대기',
-    REJECTED:'해제 거절'
+    REJECTED:'해제 거절',
+    SUPERSEDED:'최신 제어로 대체'
   }[String(v||'').toUpperCase()]||v||'-')
 
   const operationKo=v=>String(v||'').toUpperCase()==='RELEASE'?'해제':'적용'
+
+  const stageKo=v=>({
+    ACCESS_ATTEMPT:'비정상 접근 시도',
+    ACCOUNT_COMPROMISE:'계정 침해 의심',
+    ACCOUNT_ACCESS:'비정상 계정 접근',
+    SENSITIVE_DATA_ACCESS:'민감정보 접근',
+    DEVICE_PREPARATION:'외부 장치 사용 준비',
+    EXFILTRATION_PREPARATION:'정보 유출 준비'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const vectorKo=v=>({
+    NONE:'없음',
+    ACCOUNT_COMPROMISE:'계정 침해 가능성',
+    SENSITIVE_DATA_ACCESS:'민감정보 접근',
+    USB_EXFILTRATION:'USB 기반 정보 유출',
+    POTENTIAL_EXFILTRATION:'정보 유출 가능성'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const responseLevelDisplayKo=v=>({
+    OBSERVE:'관찰',
+    ENHANCED_MONITORING:'강화 모니터링',
+    PREPARE_CONTROL:'제어 준비',
+    SELECTIVE_PREVENT:'선택적 선제 대응',
+    PREVENT:'선제 차단'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const controlKo=v=>({
+    USB_WRITE_RESTRICT:'USB 쓰기 제한',
+    NETWORK_RESTRICT:'네트워크 제한',
+    PROCESS_TERMINATE:'프로세스 종료',
+    NONE:'없음'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const predictionStatusKo=v=>({
+    PROPOSED:'승인 대기',
+    CONTROL_QUEUED:'제어 대기',
+    OBSERVING:'관찰 중',
+    APPROVED:'승인 완료',
+    REJECTED:'거절',
+    CONTROL_FAILED:'제어 실패',
+    CONTROLLED:'제어 적용',
+    SUPERSEDED:'최신 제어로 대체'
+  }[String(v||'').toUpperCase()]||v||'-')
+
+  const requestedByKo=v=>({
+    PREDICTIVE_ENGINE:'예측 엔진',
+    USER:'사용자',
+    DLP_ALERT_ADMIN:'DLP 관리자',
+    ADMIN:'관리자',
+    SYSTEM:'시스템'
+  }[String(v||'').toUpperCase()]||v||'-')
   const evidenceProcesses=Array.isArray(evidence?.running_processes)?evidence.running_processes:[]
 
   const latestPersistedGruPrediction=[...predictions]
@@ -2117,7 +2169,7 @@ function SoarControlPage(){
   const latestGruPrediction=latestThreatPrediction
 
   return <>{alertContext&&<Notice type="warning"><b>DLP 대응 대상 이벤트 · Event #{alertContext.id??alertContext.event_id??'-'}</b><br/>{alertContext.user||'-'} {'·'} {koEvent(alertContext.event_type)} {'·'} Risk {num(alertContext.risk_score).toFixed(2)} {'·'} {alertContext.process_name||'-'}<div className="alert-actions"><button className="btn danger" disabled={Boolean(busy)} onClick={queueDlpProcessTerminate}>{busy==='dlp-process-terminate'?'제어 요청 중...':'탐지 프로세스 즉시 종료'}</button></div></Notice>}
-    <SectionHeader>Predictive Threat Progression</SectionHeader>
+    <SectionHeader>예측 위협 진행 상태</SectionHeader>
     <div className="section-caption">
       최근 사용자 행동과 Risk · Sequence · Personal/Peer UEBA 신호를 결합해 위협 진행 단계를 판단하며, 표시되는 Prediction 수치는 마지막으로 저장된 탐지 결과입니다.
       조건이 충분한 경우 제한적인 Micro-Control을 수행합니다.
@@ -2127,30 +2179,30 @@ function SoarControlPage(){
     {msg&&<Notice>{msg}</Notice>}
 
     <div className="st-metric-grid cols4">
-      <StMetric label="최근 탐지 위협 단계" value={latestPrediction?.current_stage||'-'} help="최근 Prediction"/>
+      <StMetric label="최근 탐지 위협 단계" value={stageKo(latestPrediction?.current_stage)} help="최근 Prediction"/>
       <StMetric label="최근 탐지 공격 진행도" value={latestPrediction?.threat_progress==null?'-':`${latestPrediction.threat_progress}%`} help="진행도"/>
-      <StMetric label="최근 탐지 신뢰도" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={latestPrediction?.predicted_vector||'-'}/>
-      <StMetric label="자동 Micro-Control" value="ON" help="정책 활성 상태"/>
+      <StMetric label="최근 탐지 신뢰도" value={latestPrediction?.prediction_confidence==null?'-':`${latestPrediction.prediction_confidence}%`} help={vectorKo(latestPrediction?.predicted_vector)}/>
+      <StMetric label="자동 경량 제어" value="활성화" help="정책 활성 상태"/>
     </div>
 
     {latestPrediction&&<>
-      <SectionHeader>최근 탐지 Prediction</SectionHeader>
+      <SectionHeader>최근 탐지 결과</SectionHeader>
       <SimpleTable
-        headers={['사용자','대상 Host','현재 단계','예측 벡터','대응 단계','추천 제어','상태','제어 ID']}
+        headers={['사용자','대상 PC','현재 단계','예측 벡터','대응 단계','추천 제어','상태','제어 ID']}
         rows={[[
           latestPrediction.user||'-',
           latestPrediction.target_host||'-',
-          latestPrediction.current_stage||'-',
-          latestPrediction.predicted_vector||'-',
-          latestPrediction.response_level||'-',
-          latestPrediction.recommended_control||'-',
-          latestPrediction.status||'-',
+          stageKo(latestPrediction.current_stage),
+          vectorKo(latestPrediction.predicted_vector),
+          responseLevelDisplayKo(latestPrediction.response_level),
+          controlKo(latestPrediction.recommended_control),
+          predictionStatusKo(latestPrediction.status),
           latestPrediction.control_action_id?`#${latestPrediction.control_action_id}`:'-'
         ]]}
       />
     </>}
 
-    <SectionHeader>SOAR 사용자 / Endpoint 필터</SectionHeader>
+    <SectionHeader>SOAR 사용자 / 엔드포인트 필터</SectionHeader>
     <div style={{
       display:'grid',
       gridTemplateColumns:'repeat(3,minmax(180px,1fr))',
@@ -2166,31 +2218,31 @@ function SoarControlPage(){
           {soarUsers.map(user=><option key={user} value={user}>{user}</option>)}
         </select>
       </Field>
-      <Field label="Host">
+      <Field label="대상 PC">
         <select value={soarHostFilter} onChange={e=>{
           setSoarHostFilter(e.target.value)
           setSelectedPredictionIds([])
         }}>
-          <option value="ALL">전체 Host</option>
+          <option value="ALL">전체 대상 PC</option>
           {soarHosts.map(host=><option key={host} value={host}>{host}</option>)}
         </select>
       </Field>
-      <Field label="Prediction 이력 상태">
+      <Field label="예측 이력 상태">
         <select value={predictionStatusFilter} onChange={e=>setPredictionStatusFilter(e.target.value)}>
-          <option value="PROPOSED">승인 대기(PROPOSED)</option>
-          <option value="CONTROL_QUEUED">제어 대기(CONTROL_QUEUED)</option>
-          <option value="OBSERVING">관찰(OBSERVING)</option>
-          <option value="APPROVED">승인 완료(APPROVED)</option>
-          <option value="REJECTED">거절(REJECTED)</option>
-          <option value="CONTROL_FAILED">제어 실패(CONTROL_FAILED)</option>
+          <option value="PROPOSED">승인 대기</option>
+          <option value="CONTROL_QUEUED">제어 대기</option>
+          <option value="OBSERVING">관찰 중</option>
+          <option value="APPROVED">승인 완료</option>
+          <option value="REJECTED">거절</option>
+          <option value="CONTROL_FAILED">제어 실패</option>
           <option value="ALL">전체 상태</option>
         </select>
       </Field>
     </div>
 
-    <SectionHeader>Prediction 제어 판단</SectionHeader>
+    <SectionHeader>예측 기반 제어 판단</SectionHeader>
     {proposedPredictions.length===0
-      ? <Notice>현재 선택한 사용자/Host에서 관리자의 판단을 기다리는 Prediction이 없습니다.</Notice>
+      ? <Notice>현재 선택한 사용자/대상 PC에서 관리자의 판단을 기다리는 Prediction이 없습니다.</Notice>
       : <>
           <div className="alert-actions" style={{marginBottom:10}}>
             <button className="btn small" disabled={Boolean(busy)} onClick={toggleAllVisiblePredictions}>
@@ -2231,9 +2283,9 @@ function SoarControlPage(){
                 />
               </td>
               <td>#{p.id}</td><td><b>{p.user||'-'}</b></td><td>{p.target_host||'-'}</td>
-              <td>{p.current_stage||'-'}</td><td>{p.threat_progress??'-'}%</td>
-              <td>{p.predicted_vector||'-'}</td><td>{p.prediction_confidence??'-'}%</td>
-              <td>{p.recommended_control||'-'}</td>
+              <td>{stageKo(p.current_stage)}</td><td>{p.threat_progress??'-'}%</td>
+              <td>{vectorKo(p.predicted_vector)}</td><td>{p.prediction_confidence??'-'}%</td>
+              <td>{controlKo(p.recommended_control)}</td>
               <td><div className="alert-actions">
                 <button className="btn primary small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'APPROVE')}>승인</button>
                 <button className="btn small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'REJECT')}>거절</button>
@@ -2243,22 +2295,22 @@ function SoarControlPage(){
         </>
     }
 
-    <SectionHeader>Prediction 이력</SectionHeader>
+    <SectionHeader>예측 이력</SectionHeader>
     <SimpleTable
       tall
-      headers={['ID','시각','사용자','Host','단계','진행도','예측 벡터','신뢰도','대응 단계','추천 제어','상태','제어 ID']}
+      headers={['ID','시각','사용자','대상 PC','단계','진행도','예측 벡터','신뢰도','대응 단계','추천 제어','상태','제어 ID']}
       rows={visiblePredictionHistory.map(p=>[
         `#${p.id}`,fmt(p.updated_at||p.created_at),p.user||'-',p.target_host||'-',
-        p.current_stage||'-',p.threat_progress==null?'-':`${p.threat_progress}%`,
-        p.predicted_vector||'-',p.prediction_confidence==null?'-':`${p.prediction_confidence}%`,
-        p.response_level||'-',p.recommended_control||'-',p.status||'-',
+        stageKo(p.current_stage),p.threat_progress==null?'-':`${p.threat_progress}%`,
+        vectorKo(p.predicted_vector),p.prediction_confidence==null?'-':`${p.prediction_confidence}%`,
+        responseLevelDisplayKo(p.response_level),controlKo(p.recommended_control),predictionStatusKo(p.status),
         p.control_action_id?`#${p.control_action_id}`:'-'
       ])}
     />
 
     <SectionHeader>실행형 SOAR 제어 현황</SectionHeader>
     <div className="section-caption">
-      Prediction 또는 관리자 판단으로 생성된 제어 명령을 Endpoint Agent가 실제 엔드포인트에서 수행합니다.
+      예측 엔진 또는 관리자 판단으로 생성된 제어 명령을 Endpoint Agent가 실제 엔드포인트에서 수행합니다.
       사용자는 제어 알림창에서 해제를 요청하고, 관리자는 당시 Endpoint Evidence를 확인한 뒤 승인 또는 거절할 수 있습니다.
     </div>
 
@@ -2285,7 +2337,7 @@ function SoarControlPage(){
             <td>#{r.id}</td>
             <td>{r.user||'-'}</td>
             <td>{r.target_host||'-'}</td>
-            <td>{operationKo(r.operation)} · {r.action_type||'-'}</td>
+            <td>{operationKo(r.operation)} · {controlKo(r.action_type)}</td>
             <td>{r.user_justification||r.reason||'-'}</td>
             <td>{r.risk_score??'-'}</td>
             <td>{r.predicted_vector||'-'}</td>
@@ -2325,7 +2377,7 @@ function SoarControlPage(){
                   ['사용자',evidence.user||'-'],
                   ['Host',evidence.target_host||'-'],
                   ['활성 창',evidence.active_window||'-'],
-                  ['제어',`${operationKo(evidence.operation)} · ${evidence.action_type||'-'}`],
+                  ['제어',`${operationKo(evidence.operation)} · ${controlKo(evidence.action_type)}`],
                   ['Risk',evidence.risk_score??'-'],
                   ['Threat Progress',evidence.threat_progress==null?'-':`${evidence.threat_progress}%`],
                   ['Prediction Confidence',evidence.prediction_confidence==null?'-':`${evidence.prediction_confidence}%`],
@@ -2500,18 +2552,18 @@ function SoarControlPage(){
     <SectionHeader>실제 제어 이력</SectionHeader>
     <SimpleTable
       tall
-      headers={['ID','시각','사용자','Host','동작','제어 유형','상태','Risk','진행도','예측 벡터','신뢰도','요청 주체','Agent 결과']}
+      headers={['ID','시각','사용자','대상 PC','동작','제어 유형','상태','위험도','진행도','예측 벡터','신뢰도','요청 주체','Agent 실행 결과']}
       rows={scopedControls.map(r=>[
         `#${r.id}`,fmt(r.updated_at||r.completed_at||r.created_at),r.user||'-',
-        r.target_host||'-',operationKo(r.operation),r.action_type||'-',statusKo(r.status),
+        r.target_host||'-',operationKo(r.operation),controlKo(r.action_type),statusKo(r.status),
         r.risk_score??'-',r.threat_progress==null?'-':`${r.threat_progress}%`,
-        r.predicted_vector||'-',r.prediction_confidence==null?'-':`${r.prediction_confidence}%`,
-        r.requested_by||'-',r.agent_message||'-'
+        vectorKo(r.predicted_vector),r.prediction_confidence==null?'-':`${r.prediction_confidence}%`,
+        requestedByKo(r.requested_by),r.agent_message||'-'
       ])}
     />
 
     <div className="alert-actions">
-      <button className="btn primary" onClick={load}>Prediction / SOAR 상태 새로고침</button>
+      <button className="btn primary" onClick={load}>예측 / SOAR 상태 새로고침</button>
     </div>
   </>
 }
