@@ -122,9 +122,13 @@ def _get_learning_events(
                     "baseline_seed_real_users_remote_v1",
                 }
             )
-            and is_event_allowed_for_baseline(
-                db,
-                event
+            and (
+                getattr(event, "source", None)
+                == "baseline_seed_real_users_remote_v1"
+                or is_event_allowed_for_baseline(
+                    db,
+                    event
+                )
             )
         )
     ]
