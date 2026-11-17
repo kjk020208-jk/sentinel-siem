@@ -1713,6 +1713,10 @@ function SoarControlPage(){
   const[selectedReleaseId,setSelectedReleaseId]=useState(null)
   const[evidence,setEvidence]=useState(null)
   const[evidenceBusy,setEvidenceBusy]=useState(false)
+  const[soarUserFilter,setSoarUserFilter]=useState('ALL')
+  const[soarHostFilter,setSoarHostFilter]=useState('ALL')
+  const[predictionStatusFilter,setPredictionStatusFilter]=useState('PROPOSED')
+  const[selectedPredictionIds,setSelectedPredictionIds]=useState([])
 
   const queueDlpProcessTerminate=async()=>{
     if(!alertContext||busy)return
@@ -1936,15 +1940,107 @@ function SoarControlPage(){
     }
   }
 
+  const decidePredictionsBatch=async(decision)=>{
+    const ids=[...selectedPredictionIds]
+    if(!ids.length||busy)return
+
+    setBusy(`prediction-batch:${decision}`)
+    setMsg('')
+    setErr('')
+
+    try{
+      const result=await call('/threat-predictions/batch-decision',{
+        method:'POST',
+        body:JSON.stringify({
+          prediction_ids:ids,
+          decision,
+          admin_note:note||null
+        })
+      })
+
+      setMsg(
+        `${decision==='APPROVE'?'선택 승인':'선택 거절'} 완료 · `
+        + `처리 ${result?.processed_count??0}건`
+        + (result?.skipped_count?` · 건너뜀 ${result.skipped_count}건`:'')
+        + (result?.failed_count?` · 실패 ${result.failed_count}건`:'')
+      )
+      setSelectedPredictionIds([])
+      await load()
+    }catch(e){
+      setErr(e.message)
+    }finally{
+      setBusy('')
+    }
+  }
+
   const ordered=[...rows].sort((a,b)=>num(b.id)-num(a.id))
   const orderedPredictions=[...predictions].sort((a,b)=>num(b.id)-num(a.id))
-  const awaiting=ordered.filter(r=>String(r.status||'').toUpperCase()==='AWAITING_ADMIN')
-  const completed=ordered.filter(r=>String(r.status||'').toUpperCase()==='COMPLETED')
-  const queued=ordered.filter(r=>['QUEUED','CLAIMED'].includes(String(r.status||'').toUpperCase()))
-  const failed=ordered.filter(r=>String(r.status||'').toUpperCase()==='FAILED')
-  const proposedPredictions=orderedPredictions.filter(p=>String(p.status||'').toUpperCase()==='PROPOSED')
-  const automaticControls=ordered.filter(r=>String(r.requested_by||'').toUpperCase()==='PREDICTIVE_ENGINE')
-  const latestPrediction=orderedPredictions[0]||null
+
+  const soarUsers=[...new Set([
+    ...ordered.map(r=>r.user),
+    ...orderedPredictions.map(p=>p.user)
+  ].filter(Boolean))].sort()
+
+  const soarHosts=[...new Set([
+    ...ordered.map(r=>r.target_host),
+    ...orderedPredictions.map(p=>p.target_host)
+  ].filter(Boolean))].sort()
+
+  const matchesSoarScope=item=>
+    (soarUserFilter==='ALL'||String(item?.user||'')===soarUserFilter)
+    &&(soarHostFilter==='ALL'||String(item?.target_host||'')===soarHostFilter)
+
+  const scopedControls=ordered.filter(matchesSoarScope)
+  const scopedPredictions=orderedPredictions.filter(matchesSoarScope)
+
+  const awaiting=scopedControls.filter(r=>String(r.status||'').toUpperCase()==='AWAITING_ADMIN')
+  const completed=scopedControls.filter(r=>String(r.status||'').toUpperCase()==='COMPLETED')
+  const queued=scopedControls.filter(r=>['QUEUED','CLAIMED'].includes(String(r.status||'').toUpperCase()))
+  const failed=scopedControls.filter(r=>String(r.status||'').toUpperCase()==='FAILED')
+
+  const latestProposedByKey=new Map()
+  scopedPredictions
+    .filter(p=>String(p.status||'').toUpperCase()==='PROPOSED')
+    .forEach(p=>{
+      const key=[
+        p.user||'',
+        p.target_host||'',
+        p.recommended_control||'NONE'
+      ].join('|||')
+      if(!latestProposedByKey.has(key))latestProposedByKey.set(key,p)
+    })
+
+  const proposedPredictions=[...latestProposedByKey.values()]
+
+  const visiblePredictionHistory=scopedPredictions.filter(p=>
+    predictionStatusFilter==='ALL'
+    ||String(p.status||'').toUpperCase()===predictionStatusFilter
+  )
+
+  const automaticControls=scopedControls.filter(r=>String(r.requested_by||'').toUpperCase()==='PREDICTIVE_ENGINE')
+  const latestPrediction=scopedPredictions[0]||orderedPredictions[0]||null
+
+  const allVisibleProposedSelected=
+    proposedPredictions.length>0
+    &&proposedPredictions.every(p=>selectedPredictionIds.includes(p.id))
+
+  const togglePredictionSelection=id=>{
+    setSelectedPredictionIds(current=>
+      current.includes(id)
+        ?current.filter(x=>x!==id)
+        :[...current,id]
+    )
+  }
+
+  const toggleAllVisiblePredictions=()=>{
+    const visibleIds=proposedPredictions.map(p=>p.id)
+    setSelectedPredictionIds(current=>{
+      if(visibleIds.every(id=>current.includes(id))){
+        return current.filter(id=>!visibleIds.includes(id))
+      }
+      return [...new Set([...current,...visibleIds])]
+    })
+  }
 
   const statusKo=v=>({
     QUEUED:'대기',
@@ -2031,32 +2127,104 @@ function SoarControlPage(){
       />
     </>}
 
+    <SectionHeader>SOAR 사용자 / Endpoint 필터</SectionHeader>
+    <div style={{
+      display:'grid',
+      gridTemplateColumns:'repeat(3,minmax(180px,1fr))',
+      gap:12,
+      marginBottom:14
+    }}>
+      <Field label="사용자">
+        <select value={soarUserFilter} onChange={e=>{
+          setSoarUserFilter(e.target.value)
+          setSelectedPredictionIds([])
+        }}>
+          <option value="ALL">전체 사용자</option>
+          {soarUsers.map(user=><option key={user} value={user}>{user}</option>)}
+        </select>
+      </Field>
+      <Field label="Host">
+        <select value={soarHostFilter} onChange={e=>{
+          setSoarHostFilter(e.target.value)
+          setSelectedPredictionIds([])
+        }}>
+          <option value="ALL">전체 Host</option>
+          {soarHosts.map(host=><option key={host} value={host}>{host}</option>)}
+        </select>
+      </Field>
+      <Field label="Prediction 이력 상태">
+        <select value={predictionStatusFilter} onChange={e=>setPredictionStatusFilter(e.target.value)}>
+          <option value="PROPOSED">승인 대기(PROPOSED)</option>
+          <option value="CONTROL_QUEUED">제어 대기(CONTROL_QUEUED)</option>
+          <option value="OBSERVING">관찰(OBSERVING)</option>
+          <option value="APPROVED">승인 완료(APPROVED)</option>
+          <option value="REJECTED">거절(REJECTED)</option>
+          <option value="CONTROL_FAILED">제어 실패(CONTROL_FAILED)</option>
+          <option value="ALL">전체 상태</option>
+        </select>
+      </Field>
+    </div>
+
     <SectionHeader>Prediction 제어 판단</SectionHeader>
     {proposedPredictions.length===0
-      ? <Notice>현재 관리자의 판단을 기다리는 Prediction이 없습니다.</Notice>
-      : <div className="table-wrap"><table>
-          <thead><tr>
-            <th>ID</th><th>사용자</th><th>Host</th><th>현재 단계</th><th>진행도</th>
-            <th>다음 벡터</th><th>신뢰도</th><th>추천 제어</th><th>결정</th>
-          </tr></thead>
-          <tbody>{proposedPredictions.map(p=><tr key={p.id}>
-            <td>#{p.id}</td><td>{p.user||'-'}</td><td>{p.target_host||'-'}</td>
-            <td>{p.current_stage||'-'}</td><td>{p.threat_progress??'-'}%</td>
-            <td>{p.predicted_vector||'-'}</td><td>{p.prediction_confidence??'-'}%</td>
-            <td>{p.recommended_control||'-'}</td>
-            <td><div className="alert-actions">
-              <button className="btn primary small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'APPROVE')}>승인</button>
-              <button className="btn small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'REJECT')}>거절</button>
-            </div></td>
-          </tr>)}</tbody>
-        </table></div>
+      ? <Notice>현재 선택한 사용자/Host에서 관리자의 판단을 기다리는 Prediction이 없습니다.</Notice>
+      : <>
+          <div className="alert-actions" style={{marginBottom:10}}>
+            <button className="btn small" disabled={Boolean(busy)} onClick={toggleAllVisiblePredictions}>
+              {allVisibleProposedSelected?'현재 목록 선택 해제':'현재 목록 전체 선택'}
+            </button>
+            <button
+              className="btn primary small"
+              disabled={Boolean(busy)||selectedPredictionIds.length===0}
+              onClick={()=>decidePredictionsBatch('APPROVE')}
+            >선택 승인 ({selectedPredictionIds.length})</button>
+            <button
+              className="btn small"
+              disabled={Boolean(busy)||selectedPredictionIds.length===0}
+              onClick={()=>decidePredictionsBatch('REJECT')}
+            >선택 거절 ({selectedPredictionIds.length})</button>
+          </div>
+
+          <div className="table-wrap"><table>
+            <thead><tr>
+              <th style={{width:46}}>
+                <input
+                  type="checkbox"
+                  checked={allVisibleProposedSelected}
+                  onChange={toggleAllVisiblePredictions}
+                  aria-label="현재 Prediction 전체 선택"
+                />
+              </th>
+              <th>ID</th><th>사용자</th><th>Host</th><th>현재 단계</th><th>진행도</th>
+              <th>다음 벡터</th><th>신뢰도</th><th>추천 제어</th><th>결정</th>
+            </tr></thead>
+            <tbody>{proposedPredictions.map(p=><tr key={p.id}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={selectedPredictionIds.includes(p.id)}
+                  onChange={()=>togglePredictionSelection(p.id)}
+                  aria-label={`Prediction #${p.id} 선택`}
+                />
+              </td>
+              <td>#{p.id}</td><td><b>{p.user||'-'}</b></td><td>{p.target_host||'-'}</td>
+              <td>{p.current_stage||'-'}</td><td>{p.threat_progress??'-'}%</td>
+              <td>{p.predicted_vector||'-'}</td><td>{p.prediction_confidence??'-'}%</td>
+              <td>{p.recommended_control||'-'}</td>
+              <td><div className="alert-actions">
+                <button className="btn primary small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'APPROVE')}>승인</button>
+                <button className="btn small" disabled={Boolean(busy)} onClick={()=>decidePrediction(p.id,'REJECT')}>거절</button>
+              </div></td>
+            </tr>)}</tbody>
+          </table></div>
+        </>
     }
 
     <SectionHeader>Prediction 이력</SectionHeader>
     <SimpleTable
       tall
       headers={['ID','시각','사용자','Host','단계','진행도','예측 벡터','신뢰도','대응 단계','추천 제어','상태','제어 ID']}
-      rows={orderedPredictions.map(p=>[
+      rows={visiblePredictionHistory.map(p=>[
         `#${p.id}`,fmt(p.updated_at||p.created_at),p.user||'-',p.target_host||'-',
         p.current_stage||'-',p.threat_progress==null?'-':`${p.threat_progress}%`,
         p.predicted_vector||'-',p.prediction_confidence==null?'-':`${p.prediction_confidence}%`,
@@ -2310,7 +2478,7 @@ function SoarControlPage(){
     <SimpleTable
       tall
       headers={['ID','시각','사용자','Host','동작','제어 유형','상태','Risk','진행도','예측 벡터','신뢰도','요청 주체','Agent 결과']}
-      rows={ordered.map(r=>[
+      rows={scopedControls.map(r=>[
         `#${r.id}`,fmt(r.updated_at||r.completed_at||r.created_at),r.user||'-',
         r.target_host||'-',operationKo(r.operation),r.action_type||'-',statusKo(r.status),
         r.risk_score??'-',r.threat_progress==null?'-':`${r.threat_progress}%`,

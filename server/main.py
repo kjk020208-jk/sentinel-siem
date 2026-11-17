@@ -335,6 +335,12 @@ class ThreatPredictionDecision(BaseModel):
     admin_note: Optional[str] = None
 
 
+class ThreatPredictionBatchDecision(BaseModel):
+    prediction_ids: list[int] = Field(default_factory=list)
+    decision: str
+    admin_note: Optional[str] = None
+
+
 def get_risk_level(score):
     if score >= 80:
         return "CRITICAL"
@@ -4492,6 +4498,87 @@ def get_latest_threat_prediction(user: str, db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(status_code=404, detail="해당 사용자의 Prediction이 없습니다.")
     return result
+
+
+@app.post("/threat-predictions/batch-decision")
+def decide_threat_predictions_batch(
+    body: ThreatPredictionBatchDecision,
+    db: Session = Depends(get_db),
+):
+    decision = str(body.decision or "").upper().strip()
+    if decision not in {"APPROVE", "REJECT"}:
+        raise HTTPException(
+            status_code=400,
+            detail="decision은 APPROVE 또는 REJECT여야 합니다.",
+        )
+
+    prediction_ids = []
+    seen = set()
+    for value in body.prediction_ids or []:
+        try:
+            prediction_id = int(value)
+        except Exception:
+            continue
+        if prediction_id <= 0 or prediction_id in seen:
+            continue
+        seen.add(prediction_id)
+        prediction_ids.append(prediction_id)
+
+    if not prediction_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="처리할 Prediction ID가 없습니다.",
+        )
+
+    if len(prediction_ids) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="한 번에 최대 100개까지 처리할 수 있습니다.",
+        )
+
+    processed = []
+    skipped = []
+    failed = []
+
+    for prediction_id in prediction_ids:
+        try:
+            result, error = decide_prediction(
+                db,
+                prediction_id=prediction_id,
+                decision=decision,
+                admin_note=body.admin_note,
+            )
+
+            if error:
+                skipped.append({
+                    "id": prediction_id,
+                    "reason": error,
+                })
+                continue
+
+            processed.append({
+                "id": prediction_id,
+                "prediction": result,
+            })
+
+        except Exception as exc:
+            db.rollback()
+            failed.append({
+                "id": prediction_id,
+                "reason": str(exc),
+            })
+
+    return {
+        "message": "Prediction 일괄 결정이 반영되었습니다.",
+        "decision": decision,
+        "requested_count": len(prediction_ids),
+        "processed_count": len(processed),
+        "skipped_count": len(skipped),
+        "failed_count": len(failed),
+        "processed": processed,
+        "skipped": skipped,
+        "failed": failed,
+    }
 
 
 @app.post("/threat-predictions/{prediction_id}/decision")
