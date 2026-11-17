@@ -7170,3 +7170,176 @@ textarea:focus{
   font-size:10px;
 }
 
+
+/* SENTINEL high-risk incident review v3 - cleaner card hierarchy */
+
+.incident-panel-description{
+  margin:8px 0 0;
+  max-width:430px;
+  color:#8390a2;
+  font-size:11px;
+  line-height:1.55;
+}
+
+.high-risk-incident-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.high-risk-incident-card{
+  width:100%;
+  border:1px solid rgba(148,163,184,.11);
+  background:#151b23;
+  border-radius:16px;
+  padding:16px 16px 14px;
+  color:#aab6c5;
+  text-align:left;
+  cursor:pointer;
+  transition:.16s ease;
+  box-shadow:none;
+}
+
+.high-risk-incident-card:hover{
+  border-color:rgba(59,130,246,.45);
+  background:#18202a;
+  transform:translateY(-1px);
+}
+
+/* top: one clear title line */
+.incident-card-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+  margin-bottom:10px;
+}
+
+.incident-card-title-wrap{
+  min-width:0;
+}
+
+.incident-card-id{
+  display:block;
+  color:#6f7c8d;
+  font-size:9px;
+  margin-bottom:4px;
+}
+
+.incident-card-title{
+  display:block;
+  color:#f3f6fa;
+  font-size:15px;
+  line-height:1.4;
+  word-break:keep-all;
+}
+
+.incident-severity{
+  flex:none;
+  border:0;
+  border-radius:999px;
+  padding:4px 8px;
+  font-style:normal;
+  font-size:10px;
+  font-weight:900;
+}
+
+.incident-severity.high{
+  color:#fb923c;
+  background:rgba(251,146,60,.10);
+}
+
+.incident-severity.critical{
+  color:#ff5a52;
+  background:rgba(239,68,68,.11);
+}
+
+/* user line: no box, just simple metadata */
+.incident-card-user{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 10px;
+  padding:0 0 10px;
+  border-bottom:1px solid rgba(148,163,184,.08);
+  background:transparent;
+  border-radius:0;
+}
+
+.incident-card-user span{
+  color:#718095;
+  font-size:10px;
+}
+
+.incident-card-user b{
+  color:#dfe6ee;
+  font-size:12px;
+}
+
+/* metrics: remove mini-cards, use simple 2-column rows */
+.incident-card-metrics{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  column-gap:20px;
+  row-gap:8px;
+}
+
+.incident-card-metrics>div{
+  border:0;
+  border-radius:0;
+  padding:0;
+  background:transparent;
+  min-width:0;
+}
+
+.incident-card-metrics span{
+  display:block;
+  margin-bottom:2px;
+  color:#6f7d8f;
+  font-size:9px;
+}
+
+.incident-card-metrics b{
+  display:block;
+  color:#d8e0e9;
+  font-size:11px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.incident-card-action{
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid rgba(148,163,184,.07);
+  text-align:right;
+  color:#60a5fa;
+  font-size:10px;
+  font-weight:700;
+}
+
+.incident-reviewed-empty{
+  border:1px solid rgba(34,197,94,.16);
+  background:rgba(34,197,94,.04);
+  border-radius:12px;
+  padding:18px;
+}
+
+.incident-reviewed-empty b{
+  display:block;
+  color:#dff7e7;
+  margin-bottom:5px;
+  font-size:13px;
+}
+
+.incident-reviewed-empty span{
+  color:#7f9086;
+  font-size:10px;
+}
+
+@media(max-width:760px){
+  .incident-card-metrics{
+    grid-template-columns:1fr;
+  }
+}
+
