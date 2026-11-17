@@ -2743,6 +2743,7 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
   const[overviewV2AckEventId,setOverviewV2AckEventId]=useState('')
   const[selectedOverviewEvent,setSelectedOverviewEvent]=useState(null)
   const[selectedRiskUser,setSelectedRiskUser]=useState(null)
+  const[showHighRiskIncidents,setShowHighRiskIncidents]=useState(false)
   const levels=['LOW','MEDIUM','HIGH','CRITICAL']
 
   const counts=levels.map(level=>[
@@ -3013,9 +3014,14 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
                 최근 5분 고위험 <b>{recentHighRiskEvents.length}</b>
               </span>
 
-              <span>
+              <button
+                type="button"
+                className="hero-meta-link"
+                onClick={()=>setShowHighRiskIncidents(true)}
+                disabled={!openHighRiskIncidents.length}
+              >
                 열린 고위험 사고 <b>{openHighRiskIncidents.length}</b>
-              </span>
+              </button>
             </div>
           </div>
 
@@ -3186,6 +3192,51 @@ function OverviewV2({events,users,summary,incidents=[],latestIncident,setPage,er
             setPage('users')
           }}
         />
+
+
+        {showHighRiskIncidents&&<div className="quick-detail-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowHighRiskIncidents(false)}}>
+          <aside className="quick-detail-panel high-risk-incident-panel">
+            <div className="quick-detail-head">
+              <div>
+                <span>HIGH RISK INCIDENTS</span>
+                <h3>열린 고위험 사고 {openHighRiskIncidents.length}건</h3>
+              </div>
+              <button type="button" className="quick-close" onClick={()=>setShowHighRiskIncidents(false)}>×</button>
+            </div>
+
+            <div className="high-risk-incident-list">
+              {openHighRiskIncidents.map(i=><button
+                key={i.id??i.incident_id}
+                type="button"
+                className="high-risk-incident-row"
+                onClick={()=>{
+                  try{
+                    sessionStorage.setItem('sentinel_detection_tab','incidents')
+                    sessionStorage.setItem('sentinel_focus_incident_id',String(i.id??i.incident_id??''))
+                  }catch{}
+                  setShowHighRiskIncidents(false)
+                  setPage('detection')
+                }}
+              >
+                <div className="high-risk-incident-main">
+                  <span>#{i.id??i.incident_id}</span>
+                  <b>{i.user||i.username||'-'}</b>
+                  <strong>{i.title||i.incident_type||'보안 사고'}</strong>
+                </div>
+                <div className="high-risk-incident-meta">
+                  <em className={riskClass(i.severity||i.risk_level)}>{String(i.severity||i.risk_level||'-').toUpperCase()}</em>
+                  <small>{String(i.status||'OPEN').toUpperCase()}</small>
+                  <small>{fmt(i.updated_at||i.created_at||i.timestamp)}</small>
+                </div>
+              </button>)}
+            </div>
+
+            <div className="quick-context-card">
+              <span>안내</span>
+              <p>사고를 선택하면 탐지 및 사고 분석 화면에서 해당 사고의 연관 이벤트와 공격 흐름을 확인할 수 있습니다.</p>
+            </div>
+          </aside>
+        </div>}
 
         <div className="ov2-operations">
           <span>
