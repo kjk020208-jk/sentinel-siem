@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from server.models import SecurityEvent
+from server.response_control_engine import ResponseControlAction
 
 
 SEQUENCE_WINDOW_MINUTES = 10
@@ -14,6 +15,36 @@ EXTERNAL_TRANSFER_PROCESSES = {
     "powershell.exe",
     "pwsh.exe"
 }
+
+
+
+def _latest_completed_release_time(db, user, reference_time):
+    """
+    가장 최근에 정상 완료된 SOAR RELEASE 시각을 반환한다.
+
+    완료된 RELEASE는 이전 공격 흐름이 종료된 경계로 취급한다.
+    따라서 새 공격 Episode의 Sequence 분석은 이 시각 이후 이벤트만 사용한다.
+    """
+    row = (
+        db.query(ResponseControlAction)
+        .filter(
+            ResponseControlAction.user == user,
+            ResponseControlAction.operation == "RELEASE",
+            ResponseControlAction.status == "COMPLETED",
+            ResponseControlAction.completed_at.isnot(None),
+            ResponseControlAction.completed_at <= reference_time,
+        )
+        .order_by(
+            ResponseControlAction.completed_at.desc(),
+            ResponseControlAction.id.desc(),
+        )
+        .first()
+    )
+
+    if row is None:
+        return None
+
+    return row.completed_at
 
 
 def analyze_sequence(db, user, reference_time=None):
@@ -32,11 +63,23 @@ def analyze_sequence(db, user, reference_time=None):
         minutes=SEQUENCE_WINDOW_MINUTES
     )
 
+    episode_reset_at = _latest_completed_release_time(
+        db,
+        user,
+        reference_time,
+    )
+
+    if (
+        episode_reset_at is not None
+        and episode_reset_at > since
+    ):
+        since = episode_reset_at
+
     recent_events = (
         db.query(SecurityEvent)
         .filter(
             SecurityEvent.user == user,
-            SecurityEvent.timestamp >= since,
+            SecurityEvent.timestamp > since,
             SecurityEvent.timestamp <= reference_time
         )
         .order_by(
@@ -189,11 +232,17 @@ def analyze_sequence(db, user, reference_time=None):
         minutes=USB_FILE_WINDOW_MINUTES
     )
 
+    if (
+        episode_reset_at is not None
+        and episode_reset_at > usb_since
+    ):
+        usb_since = episode_reset_at
+
     usb_context_events = (
         db.query(SecurityEvent)
         .filter(
             SecurityEvent.user == user,
-            SecurityEvent.timestamp >= usb_since,
+            SecurityEvent.timestamp > usb_since,
             SecurityEvent.timestamp <= reference_time
         )
         .order_by(
