@@ -602,6 +602,29 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
         if network_auto_gate:
             recommended_control = 'NETWORK_RESTRICT'
 
+    # SENTINEL_PROGRESSIVE_WEB_STAGE2_V2
+    # New web event itself is only a file-read suspicion, so stage 2 requires
+    # a high-risk DLP signal, 80% progression and 70% prediction confidence.
+    # The real process kill is separately gated by an opt-in env variable and
+    # user-scoped Windows agent. Stronger network control remains review-only.
+    web_process_stage = bool(
+        recommended_control is None
+        and web_signals
+        and web_high_risk
+        and progress >= 80
+        and confidence >= 70
+        and _etype(events[-1]) in {'web_upload', 'email_send'}
+        and str(getattr(events[-1], 'process_name', '') or '').strip().lower()
+            in {'chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe',
+                'opera.exe', 'outlook.exe', 'olk.exe', 'thunderbird.exe'}
+    )
+    if web_process_stage:
+        recommended_control = 'PROCESS_TERMINATE'
+        evidence.append(
+            '단계적 웹 DLP: 민감파일 브라우저 접근 + 높은 위험/진행도; '
+            '대상 사용자 브라우저 선택적 종료 추천'
+        )
+
     # Web/mail review-only control proposal. Independent evidence is required:
     # high-risk DLP signal + later suspicious process + failed-logon episode
     # or sequence evidence. Never auto-queue a network block on this path.
@@ -667,11 +690,13 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     auto_control_types = {
         'USB_WRITE_RESTRICT',
         'NETWORK_RESTRICT',
+        'PROCESS_TERMINATE',
     }
 
     if (
         AUTO_MICRO_CONTROL_ENABLED
         and not web_review_only
+        and (recommended_control != 'PROCESS_TERMINATE' or os.getenv('SENTINEL_AUTO_WEB_PROCESS_TERMINATE', 'false').strip().lower() in {'1','true','yes','on'})
         and recommended_control in auto_control_types
         and bool(str(target_host or '').strip())
         and not _control_active_or_pending(
@@ -688,6 +713,7 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
             reason=(
                 'Predictive Threat Progression 자동 제어'
                 f' · control={recommended_control}'
+                f' · process={str(getattr(web_signals[-1], 'process_name', '') or '').strip().lower() if recommended_control == 'PROCESS_TERMINATE' and web_signals else '-'}'
                 f' · stage={stage}'
                 f' · progress={progress}'
                 f' · confidence={confidence}'
