@@ -1336,6 +1336,135 @@ def create_event(
             }
 
     # -------------------------------------------------
+
+    # SENTINEL_USB_BASELINE_SEED_V2_START
+    # Presentation-only historical training data.
+    # This path deliberately bypasses live detection and SOAR.
+    if (
+        event.event_type == "__seed_usb_baseline__"
+        and event.source == "baseline_seed_real_users_remote_v1"
+    ):
+        limits = {"???": 12, "???": 2}
+        username = str(event.user or "")
+        raw_id = str(event.raw_event_id or "")
+        prefix = f"REMOTEBASE-USB-V2-{username}-"
+
+        if (
+            username not in limits
+            or not raw_id.startswith(prefix)
+            or len(raw_id) != len(prefix) + 8
+            or not raw_id[-8:].isdigit()
+            or event.timestamp is None
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid presentation baseline candidate"
+            )
+
+        existing = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == username,
+                SecurityEvent.source == event.source,
+                SecurityEvent.raw_event_id == raw_id,
+            )
+            .first()
+        )
+
+        if existing:
+            return {
+                "message": "USB baseline already stored",
+                "duplicate": True,
+                "event_id": existing.id,
+                "risk_level": existing.risk_level,
+            }
+
+        existing_count = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == username,
+                SecurityEvent.source == event.source,
+                SecurityEvent.raw_event_id.like(
+                    f"REMOTEBASE-USB-V2-{username}-%"
+                ),
+            )
+            .count()
+        )
+
+        if existing_count >= limits[username]:
+            raise HTTPException(
+                status_code=409,
+                detail="USB baseline seed limit reached"
+            )
+
+        template = (
+            db.query(SecurityEvent)
+            .filter(
+                SecurityEvent.user == username,
+                SecurityEvent.source == event.source,
+                SecurityEvent.risk_level == "LOW",
+                SecurityEvent.event_type == "login_success",
+            )
+            .first()
+        )
+
+        if template is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Existing LOW baseline template not found"
+            )
+
+        from sqlalchemy import inspect as sa_inspect
+
+        values = {}
+        for attr in sa_inspect(SecurityEvent).mapper.column_attrs:
+            column = attr.columns[0]
+            if not column.primary_key:
+                values[attr.key] = getattr(template, attr.key)
+
+        values.update({
+            "user": username,
+            "source": event.source,
+            "raw_event_id": raw_id,
+            "timestamp": event.timestamp,
+            "event_type": "usb_connected",
+            "usb_connected": 1,
+            "risk_level": "LOW",
+        })
+
+        for name, value in {
+            "risk_score": 0,
+            "anomaly_score": 0,
+            "login_fail_count": 0,
+            "file_access_count": 0,
+            "login_success": 0,
+            "process_name": None,
+            "command_line": None,
+            "file_name": None,
+            "file_path": None,
+        }.items():
+            if name in values:
+                values[name] = value
+
+        row = SecurityEvent(**values)
+        db.add(row)
+
+        try:
+            db.commit()
+            db.refresh(row)
+        except Exception:
+            db.rollback()
+            raise
+
+        return {
+            "message": "USB presentation baseline stored",
+            "duplicate": False,
+            "event_id": row.id,
+            "risk_level": row.risk_level,
+            "soar_executed": False,
+        }
+    # SENTINEL_USB_BASELINE_SEED_V2_END
+
     # DLP entry-point detection
     # -------------------------------------------------
     # Collector가 보낸 4663 민감파일 접근에서 실제 파일을 읽은
