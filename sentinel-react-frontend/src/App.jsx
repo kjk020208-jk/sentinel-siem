@@ -2150,6 +2150,63 @@ function SoarControlPage(){
     }
   }
 
+
+  const adminDirectRelease=async(r)=>{
+    if(busy)return
+    if(!window.confirm(
+      `${r.user} / ${r.target_host||'-'} / ${r.action_type} 제어를 해제할까요?`
+    ))return
+
+    const reason=window.prompt(
+      '관리자 직접 해제 사유',
+      '관리자 판단에 따른 긴급 해제'
+    )
+    if(!reason||reason.trim().length<3)return
+
+    setBusy(`admin-release:${r.id}`)
+    setMsg('')
+    setErr('')
+    try{
+      const result=await call(`/response-controls/${r.id}/admin-release`,{
+        method:'POST',
+        body:JSON.stringify({reason:reason.trim()})
+      })
+      setMsg(`관리자 직접 해제 명령 등록 · #${result?.action?.id||'-'}`)
+      await load()
+    }catch(e){
+      setErr(e.message)
+    }finally{
+      setBusy('')
+    }
+  }
+
+  const directReleaseCandidates=(()=>{
+    const ordered=[...rows].sort((a,b)=>Number(b.id)-Number(a.id))
+    const sameTarget=(a,b)=>
+      a.user===b.user
+      &&a.action_type===b.action_type
+      &&(a.target_agent_id&&b.target_agent_id
+        ? a.target_agent_id===b.target_agent_id
+        : a.target_host===b.target_host)
+
+    return ordered.filter(r=>
+      r.operation==='APPLY'
+      &&r.status==='COMPLETED'
+      &&['USB_WRITE_RESTRICT','NETWORK_RESTRICT'].includes(r.action_type)
+      &&(r.target_host||r.target_agent_id)
+      &&!ordered.some(x=>
+        x.id>r.id
+        &&sameTarget(r,x)
+        &&(
+          (x.operation==='RELEASE'
+            &&['QUEUED','CLAIMED','COMPLETED'].includes(x.status))
+          ||(x.operation==='APPLY'
+            &&['QUEUED','CLAIMED','COMPLETED'].includes(x.status))
+        )
+      )
+    )
+  })()
+
   const decideRelease=async(id,decision)=>{
     if(!id||busy)return
     setBusy(`release:${id}:${decision}`)
@@ -2579,6 +2636,36 @@ function SoarControlPage(){
       <StMetric label="실행 완료" value={completed.length} help="실제 Agent 결과"/>
       <StMetric label="실패" value={failed.length} help="FAILED"/>
     </div>
+
+
+    <SectionHeader>관리자 직접 해제</SectionHeader>
+    <div className="section-caption">
+      사용자 해제 요청 없이 USB·네트워크 제어를 직접 해제합니다.
+      실제 해제 완료 여부는 Agent 작업 이력에서 확인하세요.
+    </div>
+
+    {directReleaseCandidates.length===0
+      ? <Notice>직접 해제할 수 있는 제어가 없습니다.</Notice>
+      : <div className="table-wrap"><table>
+          <thead><tr>
+            <th>ID</th><th>사용자</th><th>Host</th>
+            <th>제어</th><th>관리자 작업</th>
+          </tr></thead>
+          <tbody>{directReleaseCandidates.map(r=><tr key={r.id}>
+            <td>#{r.id}</td>
+            <td>{r.user||'-'}</td>
+            <td>{r.target_host||'-'}</td>
+            <td>{r.action_type}</td>
+            <td><button
+              className="btn primary small"
+              disabled={Boolean(busy)}
+              onClick={()=>adminDirectRelease(r)}
+            >
+              관리자 직접 해제
+            </button></td>
+          </tr>)}</tbody>
+        </table></div>
+    }
 
     <SectionHeader>관리자 해제 승인</SectionHeader>
     <Field label="관리자 메모">

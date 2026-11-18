@@ -4412,6 +4412,81 @@ def analyze_event_with_ai(
 # Predictive / Real SOAR Response Control
 # ============================================================
 
+
+class AdminDirectRelease(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@app.post("/response-controls/{action_id}/admin-release")
+def admin_direct_release(
+    action_id: int,
+    body: AdminDirectRelease,
+    db: Session = Depends(get_db),
+):
+    source = db.query(ResponseControlAction).filter(
+        ResponseControlAction.id == action_id
+    ).first()
+
+    if source is None:
+        raise HTTPException(status_code=404, detail="제어를 찾을 수 없습니다.")
+
+    if source.action_type not in {
+        "USB_WRITE_RESTRICT", "NETWORK_RESTRICT"
+    }:
+        raise HTTPException(status_code=400, detail="직접 해제 불가 제어입니다.")
+
+    if source.operation != "APPLY" or source.status != "COMPLETED":
+        raise HTTPException(status_code=409, detail="완료된 차단 작업이 아닙니다.")
+
+    target_filters = [
+        ResponseControlAction.user == source.user,
+        ResponseControlAction.action_type == source.action_type,
+    ]
+
+    if source.target_agent_id:
+        target_filters.append(
+            ResponseControlAction.target_agent_id == source.target_agent_id
+        )
+    elif source.target_host:
+        target_filters.append(
+            ResponseControlAction.target_host == source.target_host
+        )
+    else:
+        raise HTTPException(status_code=409, detail="대상 PC가 불명확합니다.")
+
+    later = (
+        db.query(ResponseControlAction)
+        .filter(*target_filters, ResponseControlAction.id > source.id)
+        .all()
+    )
+
+    for row in later:
+        if row.operation == "RELEASE" and row.status in {
+            "QUEUED", "CLAIMED", "COMPLETED"
+        }:
+            raise HTTPException(status_code=409, detail="이미 해제 명령이 있습니다.")
+        if row.operation == "APPLY" and row.status in {
+            "QUEUED", "CLAIMED", "COMPLETED"
+        }:
+            raise HTTPException(status_code=409, detail="최신 차단 작업을 선택하세요.")
+
+    result, error = create_control_action(
+        db,
+        user=source.user,
+        action_type=source.action_type,
+        operation="RELEASE",
+        target_host=source.target_host,
+        target_agent_id=source.target_agent_id,
+        reason=f"관리자 직접 해제 · 원본 #{source.id}",
+        requested_by="ADMIN_DIRECT",
+        admin_note=body.reason,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {"message": "관리자 해제 명령 등록", "action": result}
+
+
 @app.get("/response-controls")
 def get_response_controls(
     user: Optional[str] = None,
