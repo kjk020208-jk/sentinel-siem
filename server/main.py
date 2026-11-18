@@ -1344,7 +1344,7 @@ def create_event(
         event.event_type == "__seed_usb_baseline__"
         and event.source == "baseline_seed_real_users_remote_v1"
     ):
-        limits = {"???": 12, "???": 2}
+        limits = {"\uAE40\uAC1C\uBC1C": 12, "\uAE40\uC7AC\uBB34": 2}
         username = str(event.user or "")
         raw_id = str(event.raw_event_id or "")
         prefix = f"REMOTEBASE-USB-V2-{username}-"
