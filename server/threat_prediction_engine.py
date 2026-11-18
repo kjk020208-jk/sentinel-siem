@@ -358,11 +358,30 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
     first_failure = failures[0].timestamp if failures else None
     successes = [e for e in events if _is_login_success(e) and (first_failure is None or e.timestamp >= first_failure)]
     first_success = successes[0].timestamp if successes else None
-    sensitive = [e for e in events if _etype(e) in FILE_TYPES and _is_sensitive(e) and (first_success is None or e.timestamp >= first_success)]
+    sensitive = [e for e in events if _etype(e) in (FILE_TYPES | {'web_upload', 'email_send'}) and _is_sensitive(e) and (first_success is None or e.timestamp >= first_success)]
     first_sensitive = sensitive[0].timestamp if sensitive else None
     usb = [e for e in events if _is_usb(e) and (first_sensitive is None or e.timestamp >= first_sensitive)]
     first_usb = usb[0].timestamp if usb else None
     procs = [e for e in events if _is_suspicious_process(e) and (first_usb is None or e.timestamp >= first_usb)]
+
+    # SENTINEL_WEB_SOAR_REVIEW_V1
+    # Browser/mail client reading a confidential file is only upload/attachment
+    # suspicion, NOT proof that data left the endpoint.
+    web_signals = [
+        e for e in events
+        if _etype(e) in {'web_upload', 'email_send'} and _is_sensitive(e)
+    ]
+    first_web_time = web_signals[0].timestamp if web_signals else None
+    web_followup_procs = [
+        e for e in events
+        if first_web_time is not None
+        and _is_suspicious_process(e)
+        and e.timestamp > first_web_time
+    ]
+    web_high_risk = any(
+        float(getattr(e, 'risk_score', 0) or 0) >= 80
+        for e in web_signals
+    )
 
     failure_count = sum(max(1, int(getattr(e, 'login_fail_count', 0) or 0)) for e in failures)
     evidence = []
@@ -399,6 +418,11 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
         stage, progress, vector = 'ACCOUNT_ACCESS', 42, 'SENSITIVE_DATA_ACCESS'
     if sensitive:
         stage, progress, vector = 'SENSITIVE_DATA_ACCESS', 65, 'USB_EXFILTRATION'
+    # WEB is an independent path from USB. It always starts with observation.
+    if web_signals and not usb:
+        stage, progress, vector = 'WEB_UPLOAD_SUSPECTED', max(progress, 72), 'WEB_EXFILTRATION'
+    if web_signals and web_followup_procs and not usb:
+        stage, progress, vector = 'WEB_EXFILTRATION_REVIEW', max(progress, 84), 'WEB_EXFILTRATION'
     if sensitive and usb:
         stage, progress, vector = 'DEVICE_PREPARATION', 85, 'USB_EXFILTRATION'
     if sensitive and usb and procs:
@@ -578,6 +602,24 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
         if network_auto_gate:
             recommended_control = 'NETWORK_RESTRICT'
 
+    # Web/mail review-only control proposal. Independent evidence is required:
+    # high-risk DLP signal + later suspicious process + failed-logon episode
+    # or sequence evidence. Never auto-queue a network block on this path.
+    web_review_only = bool(
+        recommended_control is None
+        and web_signals
+        and web_followup_procs
+        and web_high_risk
+        and (float(sequence_score or 0) >= 40 or failure_count >= 3)
+        and progress >= 80
+    )
+    if web_review_only:
+        recommended_control = 'NETWORK_RESTRICT'
+        evidence.append(
+            '웹/메일 민감파일 접근 의심 + 후속 프로세스 및 독립 증거: '
+            '관리자 검토용 제어 추천 (자동 실행 금지)'
+        )
+
     if progress < 40 and recommended_control is None:
         return {
             'persisted': False,
@@ -629,6 +671,7 @@ def evaluate_threat_prediction(db, *, user, reference_time, source_event_id=None
 
     if (
         AUTO_MICRO_CONTROL_ENABLED
+        and not web_review_only
         and recommended_control in auto_control_types
         and bool(str(target_host or '').strip())
         and not _control_active_or_pending(
