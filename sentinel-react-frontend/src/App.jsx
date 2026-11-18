@@ -1529,7 +1529,7 @@ function ProfileView({profile,eventCount=0}){
   const ips=Array.isArray(profile.known_ips)?(profile.known_ips.length?profile.known_ips.join(', '):'학습 데이터 부족'):(profile.known_ips||'학습 데이터 부족')
   const processes=Array.isArray(profile.normal_processes)?(profile.normal_processes.length?profile.normal_processes.join(', '):'학습 데이터 부족'):(profile.normal_processes||'학습 데이터 부족')
   const avgFile=num(profile.average_file_access??profile.avg_file_access).toFixed(1)+'회'
-  let usb=num(profile.usb_usage_rate); if(usb<=1)usb*=100
+  const usb = num(profile?.usb_usage_rate_percent)
   return <>
     <div className="kpis baseline-status-grid"><Kpi title="학습 상태" value={confidence} hint="개인 기준선 신뢰도"/><Kpi title="정상 학습 이벤트" value={learningCount} hint="LOW 이벤트만 기준선 학습"/><Kpi title="기준선 가중치" value={weight.toFixed(2)} hint="학습량에 따른 탐지 반영도"/><Kpi title="현재 수집 이벤트" value={eventCount} hint="선택 사용자의 전체 이벤트"/></div>
     <div className="learning-note"><b>Learning Guard</b> · 현재 개인 행동 기준선은 이전 이벤트 중 <b>LOW 위험 등급</b>으로 판정된 정상 행동만 학습합니다. MEDIUM / HIGH / CRITICAL 이벤트는 감사 및 탐지 기록에는 유지되지만 정상 행동 기준에는 포함되지 않습니다.<div className="confidence-track"><div className="confidence-fill" style={{width:`${pct}%`}}/></div></div>
@@ -1577,8 +1577,7 @@ function PeerGroupView({profile}){
 
   const peerFile=num(peer?.average_file_access).toFixed(1)
 
-  let personalUsb=num(profile?.usb_usage_rate)
-  if(personalUsb<=1)personalUsb*=100
+  const personalUsb = num(profile?.usb_usage_rate_percent)
 
   const peerUsb=num(peer?.usb_usage_rate_percent)
 
